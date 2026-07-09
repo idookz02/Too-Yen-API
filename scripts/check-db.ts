@@ -2,7 +2,7 @@
  * Step 1 "Done when" scratch script — select from users against the real DB.
  * Run: bun run db:check   (needs DATABASE_URL in .env)
  */
-import { db } from "../src/db/client";
+import { db } from "../src/db";
 import { users } from "../src/db/schema";
 
 const rows = await db

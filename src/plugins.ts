@@ -1,7 +1,6 @@
 /**
- * Global plugins (CORS, Swagger) — DESIGN_PATTERN.md §4.
- * Cross-cutting plugins from implementation-plan Phase 1 (error.ts, auth.ts)
- * will live alongside this file in src/plugins/.
+ * Global plugins shared across the whole app (CORS, Swagger) — DESIGN_PATTERN.md §4.
+ * Per-controller / cross-cutting plugins (auth, etc.) live under src/shared/plugins/.
  */
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
@@ -18,6 +17,12 @@ export const globalPlugins = new Elysia({ name: "global-plugins" })
           description:
             "Recipe sharing API — Bun + ElysiaJS + Drizzle on Supabase",
         },
+        tags: [
+          {
+            name: "Master",
+            description: "Public master-data dropdowns (Module 6)",
+          },
+        ],
       },
     }),
   );
