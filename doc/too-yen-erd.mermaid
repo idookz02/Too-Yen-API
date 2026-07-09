@@ -1,0 +1,159 @@
+erDiagram
+    users {
+        BIGINT user_id PK
+        VARCHAR email UK "required, used for recovery"
+        VARCHAR username UK "immutable after signup"
+        VARCHAR password_hash
+        VARCHAR display_name
+        VARCHAR profile_picture_path "nullable, Supabase object path (ADR-009)"
+        ENUM role "user | admin"
+        BIGINT tier_id FK "nullable, auto-set by trigger (ADR-012)"
+        DATETIME created_at
+    }
+
+    master_tier {
+        BIGINT tier_id PK
+        VARCHAR name UK
+        INT min_likes UK "tier = highest with min_likes <= total likes"
+        BOOLEAN is_active
+        DATETIME created_at
+    }
+
+    recipe {
+        BIGINT recipe_id PK
+        BIGINT user_id FK "owner"
+        VARCHAR recipe_name "nullable while draft"
+        TEXT description "nullable while draft, required at publish"
+        BIGINT skill_level_id FK "nullable while draft"
+        INT cook_time_minutes "nullable, range filter in search (ADR-011)"
+        BIGINT cooking_method_id FK "nullable while draft"
+        BIGINT category_id FK "nullable while draft"
+        ENUM status "draft | published | private"
+        DATETIME published_at "nullable"
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    master_skill_level {
+        BIGINT skill_level_id PK
+        VARCHAR name UK
+        BOOLEAN is_active "soft delete (ADR-003)"
+        DATETIME created_at
+    }
+
+    master_cooking_method {
+        BIGINT cooking_method_id PK
+        VARCHAR name UK
+        BOOLEAN is_active
+        DATETIME created_at
+    }
+
+    master_category {
+        BIGINT category_id PK
+        VARCHAR name UK
+        BOOLEAN is_active
+        DATETIME created_at
+    }
+
+    master_equipment {
+        BIGINT equipment_id PK
+        VARCHAR name UK
+        BOOLEAN is_active
+        DATETIME created_at
+    }
+
+    recipe_equipment {
+        BIGINT recipe_id PK, FK "ON DELETE CASCADE"
+        BIGINT equipment_id PK, FK
+    }
+
+    ingredient {
+        BIGINT ingredient_id PK
+        VARCHAR name UK "grown from user autocomplete (ADR-001)"
+        DATETIME created_at
+    }
+
+    unit {
+        BIGINT unit_id PK
+        VARCHAR name UK "grown from user autocomplete (ADR-007)"
+        DATETIME created_at
+    }
+
+    recipe_ingredient {
+        BIGINT recipe_id PK, FK "ON DELETE CASCADE"
+        BIGINT ingredient_id PK, FK
+        DECIMAL amount "nullable"
+        BIGINT unit_id FK "nullable"
+        INT sort_order "display order as entered"
+    }
+
+    cooking_step {
+        BIGINT step_id PK
+        BIGINT recipe_id FK "ON DELETE CASCADE"
+        INT step_number "UK with recipe_id"
+        TEXT instruction
+        VARCHAR image_path "nullable, Supabase object path (ADR-009)"
+    }
+
+    recipe_media {
+        BIGINT media_id PK
+        BIGINT recipe_id FK "ON DELETE CASCADE"
+        ENUM media_type "image | video (max 1 video, app-enforced)"
+        VARCHAR bucket "Supabase Storage bucket"
+        VARCHAR object_path "object key in bucket"
+        BOOLEAN is_cover "one TRUE per recipe, app-enforced"
+        INT sort_order "gallery order"
+        DATETIME created_at
+    }
+
+    comment {
+        BIGINT comment_id PK
+        BIGINT recipe_id FK "ON DELETE CASCADE"
+        BIGINT user_id FK
+        TEXT comment_text
+        VARCHAR image_path "nullable, 1 image, Supabase object path (ADR-009)"
+        BOOLEAN is_deleted "soft delete by comment owner (ADR-008)"
+        DATETIME created_at "list ordered DESC"
+        DATETIME updated_at "nullable, set on edit"
+    }
+
+    recipe_like {
+        BIGINT recipe_id PK, FK "ON DELETE CASCADE"
+        BIGINT user_id PK, FK
+        DATETIME created_at
+    }
+
+    recipe_favorite {
+        BIGINT recipe_id PK, FK "ON DELETE CASCADE"
+        BIGINT user_id PK, FK
+        DATETIME created_at "orders saved list DESC"
+    }
+
+    recent_search {
+        BIGINT search_id PK
+        BIGINT user_id FK
+        VARCHAR keyword "UK with user_id"
+        DATETIME searched_at
+    }
+
+    users ||--o{ recipe : "owns"
+    users ||--o{ comment : "writes"
+    users ||--o{ recipe_like : "likes"
+    users ||--o{ recipe_favorite : "saves"
+    users ||--o{ recent_search : "has"
+
+    recipe ||--o{ recipe_ingredient : "contains"
+    ingredient ||--o{ recipe_ingredient : "used in"
+    unit ||--o{ recipe_ingredient : "measures"
+    recipe ||--o{ cooking_step : "has steps"
+    recipe ||--o{ recipe_media : "has media"
+    recipe ||--o{ comment : "receives"
+    recipe ||--o{ recipe_like : "liked by"
+    recipe ||--o{ recipe_favorite : "saved by"
+    recipe ||--o{ recipe_equipment : "uses"
+    master_equipment ||--o{ recipe_equipment : "listed in"
+
+    master_tier ||--o{ users : "ranks"
+    master_skill_level ||--o{ recipe : "classifies"
+    master_cooking_method ||--o{ recipe : "classifies"
+    master_category ||--o{ recipe : "classifies"

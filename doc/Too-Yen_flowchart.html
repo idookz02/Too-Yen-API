@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Too-Yen — Flowchart (True / False)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  body{margin:0;background:#f1ecfb;color:#1f2733;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{background:#fff;margin:22px;border-radius:22px;padding:26px 28px 34px;
+    box-shadow:0 10px 40px rgba(80,60,140,.08)}
+  h1{margin:0 0 2px;font-size:23px}h1 span{color:#f6a13d}
+  .sub{color:#5b6b7a;margin:6px 0 4px;font-size:13.5px;max-width:920px;line-height:1.5}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin:12px 0 4px;font-size:12px;color:#5b6b7a}
+  .legend b{color:#1f2733}
+  .section-title{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;
+    letter-spacing:.5px;margin:26px 2px 10px;text-transform:uppercase;color:#475066}
+  .section-title .tag{font-size:11px;color:#fff;padding:4px 11px;border-radius:20px}
+  .grid{display:flex;flex-wrap:wrap;gap:18px}
+  .card{flex:1 1 340px;border:1px solid #e6e2f0;border-radius:16px;padding:14px 12px 8px;background:#fbfaff}
+  .card h3{margin:2px 6px 6px;font-size:14px;color:#2b3340}
+  .card .menu-tag{font-size:11px;color:#7a869a;margin:0 6px 8px}
+  .mermaid{display:flex;justify-content:center}
+  footer{color:#7a869a;font-size:12px;text-align:center;padding:14px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Too-Yen <span>· Flowchart</span></h1>
+  <p class="sub">Standard flowchart per menu. Every decision (diamond) has both branches drawn: <b>True</b> and <b>False</b>, each routed to its destination. User and Admin flows are separated.</p>
+  <div class="legend">
+    <div>◇ <b>Decision</b> (True / False)</div>
+    <div>▭ <b>Process / Screen</b></div>
+    <div>▱ <b>Cross-menu link</b></div>
+    <div>⬭ <b>Start / End</b></div>
+  </div>
+
+  <div class="section-title"><span class="tag" style="background:#2d9cdb">USER</span> User Menus</div>
+  <div class="grid">
+
+    <div class="card">
+      <h3>1 · Sign-up / Login / Forgot Password</h3>
+      <div class="menu-tag">Authentication</div>
+      <pre class="mermaid">
+flowchart TD
+  A([Open App]) --> B[Login Page]
+  B --> C{Have account?}
+  C -->|True| E[Login: user + password]
+  C -->|False| D[Sign-up form]
+  D --> D2[Create account]
+  D2 --> H([Home])
+  E --> G{Valid credentials?}
+  G -->|True| H
+  G -->|False| E2[Show error / retry]
+  E2 --> E
+  B --> FP[Forgot password]
+  FP --> FQ[Enter email / username]
+  FQ --> FR{Account found?}
+  FR -->|True| FS[Set new password]
+  FR -->|False| FT[Not found message]
+  FT --> FQ
+  FS --> B
+  H --> NEXT[/"To → Home Feed"/]
+  class NEXT ref
+  classDef ref fill:#e7f0ff,stroke:#2d9cdb,color:#124;
+      </pre>
+    </div>
+
+    <div class="card">
+      <h3>2 · Home Feed</h3>
+      <div class="menu-tag">Share &amp; discover</div>
+      <pre class="mermaid">
+flowchart TD
+  A[Home feed] --> B[View / like / favorite in feed]
+  B --> C{Own post?}
+  C -->|True| D[Manage menu]
+  C -->|False| E[View only]
+  D --> AC{Manage action?}
+  AC -->|Set Private| SP[Set post Private]
+  SP --> SP2[Hidden from public feed &amp; search]
+  SP2 --> SP3{Set Public?}
+  SP3 -->|True| SP4[Restore to public feed]
+  SP3 -->|False| SP5[Stays private in Profile]
+  AC -->|Delete| DL[Delete post]
+  DL --> H{Confirm delete?}
+  H -->|True| I[Removed from feed, search, saved + success]
+  H -->|False| D
+  B --> P1[/"Open post → Post Detail"/]
+  A --> P2[/"Search bar → Search"/]
+  A --> P3[/"Create → Create Recipe"/]
+  class P1,P2,P3 ref
+  classDef ref fill:#e7f0ff,stroke:#2d9cdb,color:#124;
+      </pre>
+    </div>
+
+    <div class="card">
+      <h3>3 · Search</h3>
+      <div class="menu-tag">Keyword &amp; advanced</div>
+      <pre class="mermaid">
+flowchart TD
+  A[Focus search box] --> B[Show recent keywords]
+  B --> C{Advanced search?}
+  C -->|True| D[Apply filters]
+  C -->|False| E[Enter keyword]
+  D --> F[Results list]
+  E --> F
+  F --> G{Any match?}
+  G -->|True| P1[/"Open result → Post Detail"/]
+  G -->|False| I[No-result message]
+  class P1 ref
+  classDef ref fill:#e7f0ff,stroke:#2d9cdb,color:#124;
+      </pre>
+    </div>
+
+    <div class="card">
+      <h3>4 · Post Detail</h3>
+      <div class="menu-tag">Full recipe view</div>
+      <pre class="mermaid">
+flowchart TD
+  A[Open recipe post] --> B[Info / ingredients / steps]
+  B --> C{Video attached?}
+  C -->|True| D["Show &amp; play video"]
+  C -->|False| E[Hide video section]
+  D --> F[Like / Favorite / Comment]
+  E --> F
+  F --> G{Owner?}
+  G -->|True| H[Manage: Set Private / Delete]
+  G -->|False| I[Read-only view]
+  F --> P1[/"Favorite → Profile · Saved"/]
+  class P1 ref
+  classDef ref fill:#e7f0ff,stroke:#2d9cdb,color:#124;
+      </pre>
+    </div>
+
+    <div class="card">
+      <h3>5 · Create Recipe</h3>
+      <div class="menu-tag">Draft &amp; publish</div>
+      <pre class="mermaid">
+flowchart TD
+  A([Create Recipe]) --> B[Fill details / ingredients / steps / video]
+  B --> C{Ready to publish?}
+  C -->|False| D[Save Draft]
+  C -->|True| E{Required fields valid?}
+  E -->|False| F[Validation message]
+  F --> B
+  E -->|True| G([Publish])
+  D --> P2[/"Profile · Draft recipes"/]
+  G --> P1[/"To → Home Feed"/]
+  G --> I[Manage published post]
+  I --> AC{Manage action?}
+  AC -->|Set Private| SP[Set post Private]
+  SP --> SP2[Hidden from public feed &amp; search]
+  SP2 --> SP3{Set Public?}
+  SP3 -->|True| SP4[Restore to public feed]
+  SP3 -->|False| SP5[Private, visible in Profile]
+  AC -->|Delete| DL[Delete post]
+  DL --> M{Confirm delete?}
+  M -->|True| N[Removed from feed, search, saved + success]
+  M -->|False| I
+  class P1,P2 ref
+  classDef ref fill:#e7f0ff,stroke:#2d9cdb,color:#124;
+      </pre>
+    </div>
+
+    <div class="card">
+      <h3>6 · User Profile</h3>
+      <div class="menu-tag">Account &amp; collections</div>
+      <pre class="mermaid">
+flowchart TD
+  A[Profile] --> B{Edit profile?}
+  B -->|True| C[Edit name / password]
+  B -->|False| D[View tabs]
+  C --> E{Password valid?}
+  E -->|True| F[Save profile]
+  E -->|False| C
+  D --> G[Saved recipes]
+  D --> H[Draft recipes]
+  G --> P1[/"Open → Post Detail"/]
+  H --> P2[/"Edit draft → Create Recipe"/]
+  class P1,P2 ref
+  classDef ref fill:#e7f0ff,stroke:#2d9cdb,color:#124;
+      </pre>
+    </div>
+
+  </div>
+
+  <div class="section-title"><span class="tag" style="background:#7c5cbf">ADMIN</span> Admin Menu</div>
+  <div class="grid">
+
+    <div class="card">
+      <h3>7 · Master Data Management</h3>
+      <div class="menu-tag">Admin only</div>
+      <pre class="mermaid">
+flowchart TD
+  A([Admin login]) --> B{Admin role?}
+  B -->|True| D[Master Data Console]
+  B -->|False| C[Access denied]
+  D --> E[Select data type]
+  E --> V[View entries]
+  V --> AC{Action?}
+  AC -->|Add| AD[Add new entry]
+  AD --> ADN[Enter entry name]
+  ADN --> AG{"Valid &amp; unique?"}
+  AG -->|True| AS[Save + refresh list]
+  AG -->|False| AE[Error message]
+  AE --> ADN
+  AC -->|Edit| ED[Edit existing row]
+  ED --> EDN[Change entry name]
+  EDN --> EG{"Valid &amp; unique?"}
+  EG -->|True| ES[Update + refresh list]
+  EG -->|False| EE[Error message]
+  EE --> EDN
+  AC -->|Delete| DL[Delete row]
+  DL --> DC{"Confirm delete? — warn if in use"}
+  DC -->|True| DR[Remove + success]
+  DC -->|False| V
+  AS --> L([Available in User app])
+  ES --> L
+  DR --> L
+  L --> P1[/"To → Create Recipe · Search"/]
+  class P1 ref
+  classDef ref fill:#efe7fb,stroke:#7c5cbf,color:#124;
+      </pre>
+    </div>
+
+  </div>
+
+  <footer>Too-Yen · flowchart generated from user stories — True/False branches complete · User &amp; Admin separated</footer>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: '-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
+      fontSize: '13px',
+      primaryColor: '#eef2ff',
+      primaryBorderColor: '#8b5cf6',
+      primaryTextColor: '#1f2733',
+      lineColor: '#5b6b7a',
+      tertiaryColor: '#fff'
+    },
+    flowchart: { curve: 'basis', nodeSpacing: 34, rankSpacing: 40, useMaxWidth: true }
+  });
+</script>
+</body>
+</html>
