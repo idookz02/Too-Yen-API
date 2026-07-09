@@ -1,12 +1,14 @@
 /**
  * Migration runner — applies SQL files in ./drizzle to DATABASE_URL.
- * Run: bun run db:migrate
+ * Run: bun run db:migrate   (ADR-010 amendment: schema is managed in code)
  *
- * ⚠️ ADR-010: the Supabase DB is the source of truth and is ALREADY populated.
- * `src/db/schema` is a mirror of it. Do NOT `drizzle-kit generate` an initial
- * migration and apply it blindly — it would try to recreate existing tables.
- * Only run this against a fresh/branch database, or with migrations you have
- * reviewed by hand.
+ * Workflow: edit src/db/schema/ → `bun run db:generate` → review the SQL → run
+ * this. Always review generated SQL before applying.
+ *
+ * ⚠️ The production DB is already deployed (17 tables). Applying a freshly
+ * generated INITIAL migration to it will fail (CREATE on existing tables) —
+ * baseline the deployed DB first (mark the initial migration as already
+ * applied in Drizzle's __drizzle_migrations journal). See ADR-010 amendment.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";

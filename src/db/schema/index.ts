@@ -2,7 +2,8 @@
  * Schema barrel — re-exports every entity table (one file per table).
  * Drizzle-kit reads this folder (see drizzle.config.ts).
  *
- * Mirrors the EXISTING Supabase DB (source of truth):
+ * This schema is the authoritative definition (ADR-010 amendment); schema
+ * changes flow code → `db:generate` → `db:migrate`. It was first deployed from
  * doc/supabase/001_schema.sql + doc/supabase/003_user_tier.sql
  * (17 tables per doc/data-dictionary-en.md).
  */

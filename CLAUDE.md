@@ -17,7 +17,7 @@ bun test -t "returns { ok: true }" # a single test by name
 bun run db:check         # smoke query against the real DB (needs DATABASE_URL)
 ```
 
-Drizzle scripts (`db:generate`, `db:migrate`, `db:push`, `db:studio`, `db:seed`) exist but see the **ADR-010 warning** below before running any of them.
+Schema is managed in code via Drizzle Kit: `db:generate` (write migration), `db:migrate` (apply), `db:push` (branch DBs only), `db:studio`, `db:seed`. See the **baseline note** below before running these against the deployed DB.
 
 Requires a `.env` (copy `.env.example`): `DATABASE_URL` (Supabase **session pooler**, port 5432), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`.
 
@@ -39,9 +39,9 @@ Requires a `.env` (copy `.env.example`): `DATABASE_URL` (Supabase **session pool
 
 **App export contract.** `src/index.ts` exports `app` and only calls `app.listen()` under `if (import.meta.main)`, so tests import `app` and call `app.handle(new Request(...))` without opening a port.
 
-**Database schema is a read-only mirror.** `src/db/schema/` has **one file per table** (17 tables) re-exported through `src/db/schema/index.ts` (the barrel drizzle-kit reads). `src/db/schema.ts` is a deprecated re-export kept so `import ... from "./schema"` still resolves. `src/db/index.ts` is the postgres.js + Drizzle client (service-role connection per ADR-010) and exports the `Db`/`Tx`/`Executor` types.
+**Database schema is code-managed.** `src/db/schema/` has **one file per table** (17 tables) re-exported through `src/db/schema/index.ts` (the barrel drizzle-kit reads). It is the authoritative definition (ADR-010 amendment): schema changes flow code → `db:generate` → review SQL → `db:migrate`. `src/db/schema.ts` is a deprecated re-export kept so `import ... from "./schema"` still resolves. `src/db/index.ts` is the postgres.js + Drizzle client (service-role connection per ADR-010) and exports the `Db`/`Tx`/`Executor` types.
 
-> ⚠️ **ADR-010 — do NOT migrate the production DB.** Supabase is the source of truth and is already populated; the Drizzle schema *mirrors* it. Use `drizzle-kit introspect`/`pull` to verify the mirror. `db:generate`/`db:migrate`/`db:push` and `src/db/seed.ts` are for **fresh or branch** databases only — generating an initial migration and applying it to prod would try to recreate existing tables. The doc `drizzle.config.ts` and `src/db/migrate.ts` restate this.
+> ⚠️ **Baseline the deployed DB before migrating it.** Production already has the 17 tables, so applying a freshly generated *initial* migration would try to `CREATE` existing tables and fail. Baseline first — mark the initial migration as already applied in Drizzle's `__drizzle_migrations` journal — then changes migrate incrementally. `db:push` is for throwaway/branch DBs only. Nobody has run migrate/seed against prod yet; verify baseline steps against the Drizzle Kit docs first. See the [ADR-010 amendment](doc/adr/ADR-010-supabase-deployment.md#amendment-2026-07-10-schema-migrations--seeding-via-code).
 
 **Config & tests without a full `.env`.** `src/config/environment.ts` uses **lazy getters**, so importing `env` doesn't validate vars you don't touch. The db client (`src/db/index.ts`) does read `DATABASE_URL` at import time; because feature modules pull it into the graph, `bunfig.toml` preloads `tests/setup.ts` which sets a dummy `DATABASE_URL` (postgres.js connects lazily, so no real DB is hit unless a test runs a query).
 

@@ -47,7 +47,7 @@ project-root/
 └── bun.lockb
 ```
 
-> **หมายเหตุ ADR-010:** Supabase DB คือ source of truth และมีข้อมูลจริงอยู่แล้ว — `src/db/schema/` เป็น *mirror* ของ DB นั้น ใช้ `drizzle-kit introspect`/`pull` เพื่อตรวจว่า mirror ตรง; **อย่า** `generate`/`migrate`/`push` schema เริ่มต้นทับ production (จะพยายามสร้างตารางที่มีอยู่แล้วซ้ำ) — สคริปต์ migration มีไว้สำหรับ fresh/branch DB เท่านั้น
+> **หมายเหตุ ADR-010 (amended 2026-07-10):** `src/db/schema/` คือคำนิยาม schema หลัก — แก้ schema แล้วไหลผ่านโค้ด: `db:generate` → review SQL → `db:migrate`; seed ด้วย `db:seed`. ⚠️ Production DB deploy 17 ตารางไปแล้ว ต้อง **baseline** ก่อน (mark migration ตั้งต้นว่า apply แล้วใน `__drizzle_migrations`) ไม่งั้น migration ตั้งต้นจะพยายามสร้างตารางซ้ำแล้ว fail; `db:push` ใช้กับ branch DB เท่านั้น
 
 ---
 

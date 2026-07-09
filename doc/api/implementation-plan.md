@@ -7,6 +7,7 @@ References: api/README.md (spec), data-dictionary-en.md, ADR-001–012 | 2026-07
 
 - The API is the only thing that talks to the database — RLS is enabled with no policies, so every connection uses the service_role credentials kept in backend env only (ADR-010).
 - DB is already deployed (17 tables + tier triggers). Drizzle schema must mirror it — introspect first, never let the ORM "sync" or auto-migrate against the live DB. Schema changes go through Supabase migrations, then re-introspect.
+  [SUPERSEDED 2026-07-10 — ADR-010 amendment: the Drizzle schema in code is authoritative; schema changes flow code → db:generate → db:migrate (baseline the deployed DB first).]
 - Business rules the DB does NOT enforce (app-enforced): publish completeness, 1 video / 1 cover per recipe, comment `is_deleted` filtering, visibility guards, tier recalc after editing `master_tier`.
 
 ## Suggested project structure

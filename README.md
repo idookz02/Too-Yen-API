@@ -40,10 +40,17 @@ bun test -t "<name>" # run a single test by name
 bun run db:check     # smoke query against the DB (needs DATABASE_URL)
 ```
 
-Drizzle helpers — `db:generate`, `db:migrate`, `db:push`, `db:studio`, `db:seed` — exist but **read the caveat below first**.
+Schema is managed in code with Drizzle Kit ([ADR-010 amendment](doc/adr/ADR-010-supabase-deployment.md#amendment-2026-07-10-schema-migrations--seeding-via-code)):
 
-> ⚠️ **The database is the source of truth ([ADR-010](doc/adr/ADR-010-supabase-deployment.md)).**
-> The live Supabase DB already exists and is populated; the Drizzle schema in `src/db/schema/` is a **read-only mirror** of it. Use `drizzle-kit introspect`/`pull` to verify the mirror. Do **not** run `generate`/`migrate`/`push` against production — the migration scripts and `db:seed` are for fresh or branch databases only.
+```bash
+# edit src/db/schema/, then:
+bun run db:generate   # write a SQL migration to ./drizzle (review it!)
+bun run db:migrate    # apply migrations to DATABASE_URL
+bun run db:seed       # seed reference data (idempotent)
+bun run db:studio     # browse the DB
+```
+
+> ⚠️ **The production DB is already deployed (17 tables).** Applying a freshly generated *initial* migration to it will fail (it tries to `CREATE TABLE` on existing tables). **Baseline** the deployed DB first — mark the initial migration as already applied in Drizzle's `__drizzle_migrations` journal — then subsequent changes migrate incrementally. Confirm the baseline steps against the Drizzle Kit docs before touching prod. `db:push` is for throwaway/branch DBs only.
 
 ## Project structure
 

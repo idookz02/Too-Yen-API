@@ -1,10 +1,10 @@
 /**
- * Seed script — populates initial reference data for a fresh DB.
+ * Seed script — populates reference data (ADR-010 amendment: seeding via code).
  * Run: bun run db:seed
  *
  * Idempotent: master tables dedupe on their unique `name`, so re-running is safe.
- * ⚠️ ADR-010: production Supabase is the source of truth and already seeded.
- * This is a starter skeleton for local / branch databases — extend per module.
+ * ⚠️ This inserts data — run against local/branch DBs freely; be deliberate
+ * about running it against production. Starter skeleton — extend per module.
  */
 import { db } from "./index";
 import {

@@ -16,6 +16,7 @@ Stack: Bun + ElysiaJS + Drizzle → Supabase (project `too-yen`) | Based on: imp
 Rules for this project:
 - Runtime is Bun + ElysiaJS + Drizzle ORM + TypeScript. Do not introduce Express/Node-isms.
 - The Supabase database is ALREADY deployed and is the source of truth. NEVER run drizzle-kit push/migrate against it. Schema changes are out of scope.
+  [SUPERSEDED 2026-07-10 — ADR-010 amendment: schema is now code-managed; migrate/seed via Drizzle Kit are allowed (baseline the deployed DB first).]
 - All DB access uses DATABASE_URL (service role). Never use the Supabase anon key.
 - Secrets come from env vars only. Never hardcode keys or commit .env.
 - Every error response uses { "error": { "code": "...", "message": "..." } } per doc/api/README.md.
@@ -53,6 +54,7 @@ recipe_favorite, recent_search.
 Match every column name, type, nullability, PK/FK/unique exactly (see the SQL files for truth).
 Also create src/db/client.ts (postgres.js + drizzle init from DATABASE_URL).
 Do NOT generate or run any migration.
+[SUPERSEDED 2026-07-10 — ADR-010 amendment permits code migrations via Drizzle Kit. Also note: src/db/client.ts is now src/db/index.ts.]
 ```
 
 Done when: `tsc --noEmit` passes; a scratch script can `select` from `users` against the real DB

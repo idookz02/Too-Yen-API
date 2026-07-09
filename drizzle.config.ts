@@ -1,11 +1,13 @@
 /**
  * Drizzle Kit config.
  *
- * ⚠️ ADR-010: the live Supabase DB is the source of truth and is already
- * populated; `src/db/schema/` mirrors it. Prefer `introspect`/`pull` to verify
- * the mirror. `generate`/`migrate` (out → ./drizzle) are wired for fresh or
- * branch databases only — do NOT push/migrate a generated initial schema onto
- * the production DB (it would try to recreate existing tables).
+ * Schema in `src/db/schema/` is authoritative (ADR-010 amendment): edit it,
+ * `bun run db:generate` a migration into ./drizzle, review the SQL, then
+ * `bun run db:migrate`.
+ *
+ * ⚠️ The production DB is already deployed (17 tables). Baseline it before
+ * running an initial generated migration against prod, or `migrate` will try
+ * to CREATE existing tables — see the ADR-010 amendment.
  */
 import { defineConfig } from "drizzle-kit";
 
