@@ -2,6 +2,8 @@
 
 References: admin-master-data.md, ADR-003/004/011/012 | Auth: **admin only** — other roles get `403 FORBIDDEN` (AC 1)
 
+> **Implementation decisions (2026-07-10):** duplicate-name checks are **case-insensitive** (applies to both 409 and the ADR-003 reactivation match); `recalc_user_tier` runs after **every** tier mutation (create/update/delete — per implementation-plan, superset of the PATCH-only wording below); renaming onto an existing name (even inactive) → 409; unknown id → `404 ENTRY_NOT_FOUND`.
+
 `{type}` = `skill-levels` | `cooking-methods` | `categories` | `equipment` | `tiers`
 
 ## GET /admin/master/{type}?include_inactive=false

@@ -1,0 +1,82 @@
+import { Elysia } from "elysia";
+import { authPlugin } from "../../shared/plugins/auth.plugin";
+import { searchService } from "./services/search.service";
+import { FeedResponseDTO } from "../recipes/dto/recipes.dto";
+import {
+  AutocompleteQueryDTO,
+  IngredientAutocompleteDTO,
+  RecentKeywordParams,
+  RecentSearchResponseDTO,
+  SearchQueryDTO,
+  UnitAutocompleteDTO,
+} from "./dto/search.dto";
+
+/** Module 5 — Search (doc/api/05-search.md). Bearer on all routes; published posts only. */
+export const searchController = new Elysia()
+  .use(authPlugin)
+
+  // GET /search/recipes — keyword + advanced filters in one endpoint
+  .get(
+    "/search/recipes",
+    ({ query, currentUser }) => searchService.search(query, currentUser),
+    {
+      query: SearchQueryDTO,
+      response: { 200: FeedResponseDTO },
+      detail: {
+        tags: ["Search"],
+        summary: "Search recipes",
+        description:
+          "All filters AND-combined (AC 4). ingredient_ids = recipe contains ALL; " +
+          "equipment_ids = uses ANY. A non-empty q is saved to recent searches.",
+      },
+    },
+  )
+
+  // GET /search/recent
+  .get("/search/recent", ({ currentUser }) => searchService.getRecent(currentUser), {
+    response: { 200: RecentSearchResponseDTO },
+    detail: {
+      tags: ["Search"],
+      summary: "Recent searches",
+      description: "Latest first, capped at 10.",
+    },
+  })
+
+  // DELETE /search/recent/{keyword}
+  .delete(
+    "/search/recent/:keyword",
+    async ({ params, currentUser, set }) => {
+      await searchService.deleteRecent(params.keyword, currentUser);
+      set.status = 204;
+    },
+    {
+      params: RecentKeywordParams,
+      detail: {
+        tags: ["Search"],
+        summary: "Remove a recent keyword",
+        description: "Idempotent — removing an unknown keyword still returns 204.",
+      },
+    },
+  )
+
+  // GET /ingredients?q= — autocomplete for form inputs + filters
+  .get("/ingredients", ({ query }) => searchService.autocompleteIngredients(query), {
+    query: AutocompleteQueryDTO,
+    response: { 200: IngredientAutocompleteDTO },
+    detail: {
+      tags: ["Search"],
+      summary: "Ingredient autocomplete",
+      description: "Prefix match, default limit 10 (max 20).",
+    },
+  })
+
+  // GET /units?q=
+  .get("/units", ({ query }) => searchService.autocompleteUnits(query), {
+    query: AutocompleteQueryDTO,
+    response: { 200: UnitAutocompleteDTO },
+    detail: {
+      tags: ["Search"],
+      summary: "Unit autocomplete",
+      description: "Prefix match, default limit 10 (max 20).",
+    },
+  });

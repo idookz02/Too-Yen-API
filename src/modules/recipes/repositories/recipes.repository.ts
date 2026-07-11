@@ -61,7 +61,8 @@ const likedByMeSql = (userId: number) =>
 const favoritedByMeSql = (userId: number) =>
   sql<boolean>`exists(select 1 from recipe_favorite rf where rf.recipe_id = ${recipe.recipeId} and rf.user_id = ${userId})`;
 
-const cardSelect = (userId: number) => ({
+/** Shared card projection — also reused by the search module. */
+export const cardSelect = (userId: number) => ({
   recipeId: recipe.recipeId,
   recipeName: recipe.recipeName,
   status: recipe.status,
@@ -77,7 +78,7 @@ const cardSelect = (userId: number) => ({
   favoritedByMe: favoritedByMeSql(userId),
 });
 
-const SORT_ORDER: Record<RecipeSort, SQL[]> = {
+export const SORT_ORDER: Record<RecipeSort, SQL[]> = {
   newest: [desc(recipe.publishedAt)],
   most_liked: [desc(likeCountSql), desc(recipe.publishedAt)],
   most_favorited: [desc(favoriteCountSql), desc(recipe.publishedAt)],

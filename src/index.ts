@@ -6,11 +6,13 @@ import { Elysia } from "elysia";
 import { globalPlugins } from "./plugins";
 import { env } from "./config/environment";
 import { AppError } from "./shared/utils/errors";
+import { adminMasterController } from "./modules/admin-master/admin-master.controller";
 import { authController } from "./modules/auth/auth.controller";
 import { engagementController } from "./modules/engagement/engagement.controller";
 import { mastersController } from "./modules/masters/masters.controller";
 import { profileController } from "./modules/profile/profile.controller";
 import { recipesController } from "./modules/recipes/recipes.controller";
+import { searchController } from "./modules/search/search.controller";
 
 export const app = new Elysia()
   // 1. Global plugins (CORS, Swagger)
@@ -54,6 +56,8 @@ export const app = new Elysia()
       .use(profileController)
       .use(recipesController)
       .use(engagementController)
+      .use(searchController)
+      .use(adminMasterController)
       .use(mastersController),
   );
 

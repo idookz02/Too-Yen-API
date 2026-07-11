@@ -2,6 +2,8 @@
 
 References: home-menu.md M5, advanced-search.md | Auth: Bearer | Searches published posts only
 
+> **Implementation decisions (2026-07-10):** `equipment_ids` = **ANY** of the listed equipment (ingredients stay ALL per ADR-001); `GET /search/recent` returns the **10 latest** keywords; `q` is trimmed before matching/saving (blank q is not saved); `DELETE /search/recent/{keyword}` is idempotent (204 even if absent); autocomplete `limit` defaults to 10, max 20.
+
 ## GET /search/recipes
 
 Keyword + advanced filters in a single endpoint — all filters combine with AND (AC 4)

@@ -35,6 +35,14 @@ export const globalPlugins = new Elysia({ name: "global-plugins" })
             description: "Like, favorite, comments (Module 4)",
           },
           {
+            name: "Search",
+            description: "Keyword + advanced search, recent, autocomplete (Module 5)",
+          },
+          {
+            name: "Admin",
+            description: "Admin master-data management (Module 6)",
+          },
+          {
             name: "Master",
             description: "Public master-data dropdowns (Module 6)",
           },
