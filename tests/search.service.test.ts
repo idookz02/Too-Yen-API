@@ -32,6 +32,7 @@ const cardRow = (over: Partial<CardRow> = {}): CardRow => ({
 
 type State = {
   capturedFilters: SearchFilters[];
+  capturedSorts: string[];
   capturedMatch: MatchInput[];
   upserts: { userId: number; keyword: string }[];
   recentCalls: number[];
@@ -48,6 +49,7 @@ let service: SearchService;
 beforeEach(() => {
   state = {
     capturedFilters: [],
+    capturedSorts: [],
     capturedMatch: [],
     upserts: [],
     recentCalls: [],
@@ -58,8 +60,9 @@ beforeEach(() => {
     matchRows: [],
   };
   const repo = {
-    searchCards: async (filters: SearchFilters) => {
+    searchCards: async (filters: SearchFilters, opts: { sort: string }) => {
       state.capturedFilters.push(filters);
+      state.capturedSorts.push(opts.sort);
       return state.rows;
     },
     countSearch: async () => state.rows.length,
@@ -127,6 +130,18 @@ describe("search", () => {
     await service.search({}, user);
     await service.search({ q: "   " }, user);
     expect(state.upserts).toHaveLength(0);
+  });
+
+  it("defaults to relevance sort when q is present, newest otherwise", async () => {
+    await service.search({ q: "tom yum" }, user);
+    await service.search({}, user);
+    await service.search({ q: "   " }, user); // blank q -> no keyword -> newest
+    expect(state.capturedSorts).toEqual(["relevance", "newest", "newest"]);
+  });
+
+  it("an explicit sort always overrides the relevance default", async () => {
+    await service.search({ q: "tom yum", sort: "most_liked" }, user);
+    expect(state.capturedSorts).toEqual(["most_liked"]);
   });
 
   it("dedupes repeated ids in the CSV", async () => {

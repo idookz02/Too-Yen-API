@@ -12,7 +12,7 @@ Query params (all optional):
 
 | Param | Example | Meaning |
 |-------|---------|---------|
-| q | `tom yum` | keyword against recipe name/description — automatically saved to recent searches |
+| q | `tom yum` | keyword — automatically saved to recent searches. **[Expanded 2026-07-10]** matches recipe name, description, **ingredient names, author display name, category/cooking-method/equipment names, and step instructions** (ILIKE substring — FTS can't tokenize Thai). Multi-word: each whitespace-separated token must match somewhere (AND). When `sort` is omitted and `q` is present, results are **relevance-ranked** (name > ingredients > author > master names > description > steps); `sort=relevance` is also accepted explicitly |
 | ingredient_ids | `5,8` | recipe must contain ALL listed ingredients (ADR-001) |
 | max_cook_time | `30` | cook_time_minutes ≤ value (range filter, ADR-011) |
 | equipment_ids | `1,4` | uses the listed equipment |

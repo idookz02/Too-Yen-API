@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, lte, sql, type SQL } from "drizzle-orm";
 import { db, type Executor } from "../../../db";
 import {
   ingredient,
@@ -24,17 +24,54 @@ export type SearchFilters = {
   categoryId?: number;
 };
 
+/** "relevance" is the default when q is present (decision 2026-07-10). */
+export type SearchSort = RecipeSort | "relevance";
+
+const tokenize = (q?: string): string[] => q?.trim().split(/\s+/).filter(Boolean) ?? [];
+
+/**
+ * One keyword token matched against every covered surface (decision
+ * 2026-07-10): recipe name/description, ingredient names, author display
+ * name, master names (category/method/equipment), and step instructions.
+ * ILIKE substring — Postgres FTS can't tokenize Thai text.
+ */
+const tokenCondition = (token: string): SQL => {
+  const p = `%${token}%`;
+  return sql`(
+    ${recipe.recipeName} ilike ${p}
+    or ${recipe.description} ilike ${p}
+    or ${users.displayName} ilike ${p}
+    or exists (select 1 from recipe_ingredient ri join ingredient ing on ing.ingredient_id = ri.ingredient_id
+               where ri.recipe_id = ${recipe.recipeId} and ing.name ilike ${p})
+    or exists (select 1 from master_category mc where mc.category_id = ${recipe.categoryId} and mc.name ilike ${p})
+    or exists (select 1 from master_cooking_method mm where mm.cooking_method_id = ${recipe.cookingMethodId} and mm.name ilike ${p})
+    or exists (select 1 from recipe_equipment re join master_equipment me on me.equipment_id = re.equipment_id
+               where re.recipe_id = ${recipe.recipeId} and me.name ilike ${p})
+    or exists (select 1 from cooking_step cs where cs.recipe_id = ${recipe.recipeId} and cs.instruction ilike ${p})
+  )`;
+};
+
+/** Weighted score for ORDER BY: name > ingredients > author > master > description > steps. */
+const relevanceScore = (tokens: string[]): SQL => {
+  const anyToken = (perToken: (pattern: string) => SQL) =>
+    sql.join(tokens.map((t) => perToken(`%${t}%`)), sql` or `);
+  return sql`(
+    (case when (${anyToken((p) => sql`${recipe.recipeName} ilike ${p}`)}) then 100 else 0 end)
+    + (case when (${anyToken((p) => sql`exists (select 1 from recipe_ingredient ri join ingredient ing on ing.ingredient_id = ri.ingredient_id where ri.recipe_id = ${recipe.recipeId} and ing.name ilike ${p})`)}) then 50 else 0 end)
+    + (case when (${anyToken((p) => sql`${users.displayName} ilike ${p}`)}) then 30 else 0 end)
+    + (case when (${anyToken((p) => sql`exists (select 1 from master_category mc where mc.category_id = ${recipe.categoryId} and mc.name ilike ${p}) or exists (select 1 from master_cooking_method mm where mm.cooking_method_id = ${recipe.cookingMethodId} and mm.name ilike ${p}) or exists (select 1 from recipe_equipment re join master_equipment me on me.equipment_id = re.equipment_id where re.recipe_id = ${recipe.recipeId} and me.name ilike ${p})`)}) then 20 else 0 end)
+    + (case when (${anyToken((p) => sql`${recipe.description} ilike ${p}`)}) then 15 else 0 end)
+    + (case when (${anyToken((p) => sql`exists (select 1 from cooking_step cs where cs.recipe_id = ${recipe.recipeId} and cs.instruction ilike ${p})`)}) then 5 else 0 end)
+  )`;
+};
+
 /** All filters AND-combined (AC 4); published posts only. */
 function buildConditions(filters: SearchFilters): SQL[] {
   const conditions: SQL[] = [eq(recipe.status, "published")];
 
-  if (filters.q) {
-    conditions.push(
-      or(
-        ilike(recipe.recipeName, `%${filters.q}%`),
-        ilike(recipe.description, `%${filters.q}%`),
-      )!,
-    );
+  // multi-word q: every token must match somewhere (decision 2026-07-10)
+  for (const token of tokenize(filters.q)) {
+    conditions.push(tokenCondition(token));
   }
   if (filters.ingredientIds.length > 0) {
     // ALL semantics (ADR-001): the recipe must contain every listed ingredient
@@ -156,17 +193,22 @@ export class SearchRepository {
 
   async searchCards(
     filters: SearchFilters,
-    opts: { sort: RecipeSort; limit: number; offset: number },
+    opts: { sort: SearchSort; limit: number; offset: number },
     currentUserId: number,
     executor: Executor = db,
   ): Promise<CardRow[]> {
+    const tokens = tokenize(filters.q);
+    const orderBy =
+      opts.sort === "relevance" && tokens.length > 0
+        ? [desc(relevanceScore(tokens)), desc(recipe.publishedAt)]
+        : SORT_ORDER[opts.sort === "relevance" ? "newest" : opts.sort];
     return executor
       .select(cardSelect(currentUserId))
       .from(recipe)
       .innerJoin(users, eq(recipe.userId, users.userId))
       .leftJoin(masterTier, eq(users.tierId, masterTier.tierId))
       .where(and(...buildConditions(filters)))
-      .orderBy(...SORT_ORDER[opts.sort])
+      .orderBy(...orderBy)
       .limit(opts.limit)
       .offset(opts.offset);
   }
@@ -175,6 +217,8 @@ export class SearchRepository {
     const [row] = await executor
       .select({ total: sql<number>`count(*)`.mapWith(Number) })
       .from(recipe)
+      // author display_name is one of the q surfaces, so the join is required here too
+      .innerJoin(users, eq(recipe.userId, users.userId))
       .where(and(...buildConditions(filters)));
     return row?.total ?? 0;
   }

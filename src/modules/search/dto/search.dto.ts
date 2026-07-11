@@ -29,11 +29,10 @@ export const SearchQueryDTO = t.Composite([
     max_cook_time: t.Optional(t.Numeric({ minimum: 1 })),
     skill_level_id: t.Optional(t.Numeric({ minimum: 1 })),
     category_id: t.Optional(t.Numeric({ minimum: 1 })),
+    // no schema default on purpose — omitted sort means "relevance when q is
+    // present, newest otherwise" (decision 2026-07-10)
     sort: t.Optional(
-      t.Union(
-        RECIPE_SORTS.map((s) => t.Literal(s)),
-        { default: "newest" },
-      ),
+      t.Union([...RECIPE_SORTS.map((s) => t.Literal(s)), t.Literal("relevance")]),
     ),
   }),
 ]);

@@ -51,8 +51,10 @@ export class SearchService {
     // a real keyword is saved to recent searches automatically (AC M5)
     if (q) await this.repo.upsertRecent(user.userId, q);
 
+    // omitted sort: relevance-first when searching by keyword (decision 2026-07-10)
+    const sort = query.sort ?? (q ? "relevance" : "newest");
     const [rows, total] = await Promise.all([
-      this.repo.searchCards(filters, { sort: query.sort ?? "newest", limit, offset }, user.userId),
+      this.repo.searchCards(filters, { sort, limit, offset }, user.userId),
       this.repo.countSearch(filters),
     ]);
     return paginated(
