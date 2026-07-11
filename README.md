@@ -28,7 +28,7 @@ Open **http://localhost:3000/swagger** for interactive API docs.
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key — server-side only, never the anon key ([ADR-010](doc/adr/ADR-010-supabase-deployment.md)) |
 | `JWT_SECRET` | Secret for signing access tokens |
 | `PORT` | Optional, defaults to `3000` |
-| `FFMPEG_PATH` | Optional — path to ffmpeg for video transcoding (720p H.264); without it videos are stored as uploaded |
+| `FFMPEG_PATH` | Optional — overrides the bundled ffmpeg (`ffmpeg-static` ships one with `bun install`; videos are transcoded to 720p H.264 server-side) |
 
 ## Scripts
 

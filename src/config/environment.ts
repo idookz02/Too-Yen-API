@@ -29,8 +29,8 @@ export const env = {
   get PORT(): number {
     return Number(process.env.PORT ?? 3000);
   },
-  // optional — video transcoding is skipped when ffmpeg is unavailable
-  get FFMPEG_PATH(): string {
-    return process.env.FFMPEG_PATH ?? "ffmpeg";
+  // optional override — by default the ffmpeg-static bundled binary is used
+  get FFMPEG_PATH(): string | undefined {
+    return process.env.FFMPEG_PATH;
   },
 };

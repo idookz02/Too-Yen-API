@@ -1,13 +1,19 @@
 /**
- * MediaProcessingService tests — real sharp encoding on generated images;
- * video paths tested without ffmpeg (pass-through + size caps).
+ * MediaProcessingService tests — real sharp encoding on generated images and a
+ * real end-to-end transcode through the bundled ffmpeg-static binary; the
+ * pass-through fallback is exercised with a bogus ffmpeg path.
  */
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import sharp from "sharp";
 import {
   IMAGE_MAX_BYTES,
   MediaProcessingService,
   VIDEO_MAX_BYTES,
+  mediaProcessingService,
+  resolveFfmpegPath,
 } from "../src/shared/services/media-processing.service";
 import { AppError } from "../src/shared/utils/errors";
 
@@ -67,6 +73,52 @@ describe("processImage", () => {
 });
 
 describe("processVideo", () => {
+  it("the bundled ffmpeg-static binary is available by default", () => {
+    expect(mediaProcessingService.ffmpegAvailable()).toBe(true);
+  });
+
+  it("transcodes a real clip to a smaller H.264 mp4 (end-to-end)", async () => {
+    // generate a deliberately bulky 2s test clip with the bundled ffmpeg
+    const dir = await mkdtemp(join(tmpdir(), "too-yen-fixture-"));
+    try {
+      const fixture = join(dir, "fixture.mp4");
+      const gen = Bun.spawn(
+        [
+          resolveFfmpegPath(),
+          "-y",
+          "-f", "lavfi",
+          "-i", "testsrc=duration=2:size=1280x720:rate=30",
+          "-c:v", "mpeg4",
+          "-q:v", "1", // near-lossless mpeg4 -> big file, lots to shrink
+          fixture,
+        ],
+        { stdout: "ignore", stderr: "ignore" },
+      );
+      expect(await gen.exited).toBe(0);
+
+      const input = new File(
+        [new Uint8Array(await readFile(fixture))],
+        "clip.mp4",
+        { type: "video/mp4" },
+      );
+      const out = await mediaProcessingService.processVideo(input);
+      expect(out.type).toBe("video/mp4");
+      expect(out.name).toBe("clip.mp4");
+      expect(out.size).toBeGreaterThan(0);
+      expect(out.size).toBeLessThan(input.size); // actually compressed
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it("stores the original when the input is corrupt (graceful fallback)", async () => {
+    const garbage = new File([new Uint8Array(4096)], "broken.mp4", {
+      type: "video/mp4",
+    });
+    const out = await mediaProcessingService.processVideo(garbage);
+    expect(out).toBe(garbage); // ffmpeg fails -> original kept, no throw
+  }, 30_000);
+
   it("passes the original through when ffmpeg is unavailable", async () => {
     expect(service.ffmpegAvailable()).toBe(false);
     const video = new File([new Uint8Array(1024)], "clip.mp4", { type: "video/mp4" });

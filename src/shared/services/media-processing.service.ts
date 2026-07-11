@@ -4,9 +4,12 @@
  * Images: sharp — auto-orient, resize the long edge to a per-type preset
  * (never upscale), encode WebP q80. Everything in storage becomes .webp.
  *
- * Videos: ffmpeg is OPTIONAL. When available (env FFMPEG_PATH or `ffmpeg` in
- * PATH) videos are transcoded to H.264 720p CRF28 mp4; when not, the original
- * file is stored unchanged — the API never fails because ffmpeg is missing.
+ * Videos: transcoded to H.264 720p CRF28 mp4 with the ffmpeg binary BUNDLED
+ * via the `ffmpeg-static` npm package (installed by `bun install` — no host
+ * setup, nothing delegated to the client). Resolution order: env FFMPEG_PATH
+ * override → bundled binary → `ffmpeg` on PATH. If the binary is missing on an
+ * exotic platform or a transcode fails (corrupt file, odd codec), the original
+ * file is stored unchanged — uploads never fail because of the transcoder.
  *
  * Input caps (checked before compressing): image ≤ 5 MB, video ≤ 50 MB
  * → 400 FILE_TOO_LARGE.
@@ -14,9 +17,14 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import ffmpegStatic from "ffmpeg-static";
 import sharp from "sharp";
 import { env } from "../../config/environment";
 import { badRequest } from "../utils/errors";
+
+/** env override → ffmpeg-static bundled binary → PATH fallback. */
+export const resolveFfmpegPath = (): string =>
+  env.FFMPEG_PATH ?? (ffmpegStatic as string | null) ?? "ffmpeg";
 
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
@@ -37,7 +45,7 @@ const baseName = (file: File, fallback: string) =>
 export class MediaProcessingService {
   private ffmpegOk: boolean | undefined;
 
-  constructor(private readonly ffmpegPath: string = env.FFMPEG_PATH) {}
+  constructor(private readonly ffmpegPath: string = resolveFfmpegPath()) {}
 
   /** Resize + WebP-encode an image; enforces the 5 MB input cap. */
   async processImage(file: File, preset: ImagePreset): Promise<File> {
