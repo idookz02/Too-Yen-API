@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { jwtPlugin, resetJwtPlugin } from "../../shared/plugins/auth.plugin";
+import { rateLimit } from "../../shared/plugins/rate-limit.plugin";
 import { authService } from "./services/auth.service";
 import {
   AuthResponseDTO,
@@ -12,6 +13,10 @@ import {
 
 /** Module 1 — Auth (doc/api/01-auth.md). No token required on these routes. */
 export const authController = new Elysia({ prefix: "/auth" })
+  // Step 9 hardening: brute-force protection on credential endpoints
+  .use(
+    rateLimit({ name: "auth", max: Number(process.env.RATE_LIMIT_AUTH_MAX ?? 10) }),
+  )
   .use(jwtPlugin)
   .use(resetJwtPlugin)
 

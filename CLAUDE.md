@@ -15,6 +15,8 @@ bun test                 # all tests
 bun test tests/healthz.test.ts     # a single test file
 bun test -t "returns { ok: true }" # a single test by name
 bun run db:check         # smoke query against the real DB (needs DATABASE_URL)
+bun run smoke            # full-endpoint smoke vs real DB+storage (needs .env + db:seed first)
+bun run storage:cleanup  # storage orphan diff, dry-run (-- --apply to delete)
 ```
 
 Schema is managed in code via Drizzle Kit: `db:generate` (write migration), `db:migrate` (apply), `db:push` (branch DBs only), `db:studio`, `db:seed`. See the **baseline note** below before running these against the deployed DB.

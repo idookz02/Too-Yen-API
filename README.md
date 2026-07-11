@@ -39,6 +39,9 @@ bun run typecheck    # tsc --noEmit (strict)
 bun test             # run tests
 bun test -t "<name>" # run a single test by name
 bun run db:check     # smoke query against the DB (needs DATABASE_URL)
+bun run smoke        # hit EVERY endpoint against the real DB+storage (needs .env + db:seed)
+bun run storage:cleanup            # list storage orphans (dry-run)
+bun run storage:cleanup -- --apply # actually delete orphans
 ```
 
 Schema is managed in code with Drizzle Kit ([ADR-010 amendment](doc/adr/ADR-010-supabase-deployment.md#amendment-2026-07-10-schema-migrations--seeding-via-code)):

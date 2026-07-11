@@ -14,9 +14,23 @@ import { profileController } from "./modules/profile/profile.controller";
 import { recipesController } from "./modules/recipes/recipes.controller";
 import { searchController } from "./modules/search/search.controller";
 
+// request logging (Step 9) — silent under bun test (NODE_ENV=test)
+const requestStart = new WeakMap<Request, number>();
+
 export const app = new Elysia()
   // 1. Global plugins (CORS, Swagger)
   .use(globalPlugins)
+  .onRequest(({ request }) => {
+    requestStart.set(request, performance.now());
+  })
+  .onAfterResponse({ as: "global" }, ({ request, set }) => {
+    if (process.env.NODE_ENV === "test") return;
+    const started = requestStart.get(request);
+    const ms = started !== undefined ? (performance.now() - started).toFixed(0) : "?";
+    console.log(
+      `${request.method} ${new URL(request.url).pathname} -> ${set.status ?? 200} (${ms}ms)`,
+    );
+  })
   // 2. Centralised error mapping (doc/api/README.md envelope) — services throw
   //    AppError, Elysia maps the rest. `as: "global"` so it also covers the
   //    /api/v1 feature modules mounted as child instances below.

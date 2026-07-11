@@ -9,6 +9,8 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "db:check": "bun run scripts/check-db.ts",
+    "smoke": "bun run scripts/smoke.ts",
+    "storage:cleanup": "bun run scripts/storage-cleanup.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:push": "drizzle-kit push",

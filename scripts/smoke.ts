@@ -1,0 +1,291 @@
+/**
+ * Smoke test (Step 9) — drives EVERY endpoint per the specs against the real
+ * database + storage, in-process via app.handle (no port). Prerequisites:
+ * a full .env and `bun run db:seed` (masters + demo admin must exist).
+ *
+ * Run: bun run smoke
+ * Creates one throwaway user per run (users have no delete endpoint — the row
+ * remains); recipes/media/comments created here are cleaned up at the end.
+ */
+process.env.RATE_LIMIT_AUTH_MAX ??= "1000"; // don't trip the auth limiter
+
+const sharp = (await import("sharp")).default;
+const { app } = await import("../src/index");
+
+const TS = Date.now();
+const SMOKE_USER = {
+  email: `smoke-${TS}@test.local`,
+  username: `smoke_${TS}`,
+  password: "Smoke1234!",
+  display_name: "Smoke Tester",
+};
+const ADMIN = {
+  username: process.env.SMOKE_ADMIN_USERNAME ?? "admin",
+  password: process.env.SMOKE_ADMIN_PASSWORD ?? "Admin1234!",
+};
+
+let pass = 0;
+let fail = 0;
+const ok = (name: string, cond: boolean, extra?: unknown) => {
+  if (cond) {
+    pass++;
+    console.log(`  ✅ ${name}`);
+  } else {
+    fail++;
+    console.error(`  ❌ ${name}`, extra !== undefined ? JSON.stringify(extra) : "");
+  }
+};
+const section = (name: string) => console.log(`\n=== ${name} ===`);
+
+type Init = { method?: string; json?: unknown; form?: FormData; token?: string };
+async function api(path: string, init: Init = {}) {
+  const headers: Record<string, string> = {};
+  if (init.token) headers.authorization = `Bearer ${init.token}`;
+  let body: string | FormData | undefined;
+  if (init.json !== undefined) {
+    headers["content-type"] = "application/json";
+    body = JSON.stringify(init.json);
+  } else if (init.form) {
+    body = init.form;
+  }
+  const res = await app.handle(
+    new Request(`http://smoke/api/v1${path}`, { method: init.method ?? "GET", headers, body }),
+  );
+  let data: unknown = null;
+  const text = await res.text();
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  // deliberately loose — a smoke script asserts shapes at runtime, not compile time
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { status: res.status, data: data as any };
+}
+
+const pngFile = async (name: string) =>
+  new File(
+    [new Uint8Array(await sharp({ create: { width: 900, height: 700, channels: 3, background: { r: 40, g: 120, b: 200 } } }).png().toBuffer())],
+    name,
+    { type: "image/png" },
+  );
+
+// ============================== flow ==============================
+
+section("ops");
+{
+  const hz = await app.handle(new Request("http://smoke/healthz"));
+  ok("GET /healthz -> 200", hz.status === 200);
+  const sw = await app.handle(new Request("http://smoke/swagger"));
+  ok("GET /swagger -> 200 (all modules visible)", sw.status === 200);
+}
+
+section("auth");
+let token = "";
+let adminToken = "";
+{
+  const form = new FormData();
+  for (const [k, v] of Object.entries(SMOKE_USER)) form.append(k, v);
+  const signup = await api("/auth/signup", { method: "POST", form });
+  ok("signup -> 201 + token + Bronze tier", signup.status === 201 && !!signup.data.access_token && signup.data.user.tier?.name === "Bronze", signup.data);
+  token = signup.data.access_token;
+
+  const dupForm = new FormData();
+  for (const [k, v] of Object.entries(SMOKE_USER)) dupForm.append(k, v);
+  const dup = await api("/auth/signup", { method: "POST", form: dupForm });
+  ok("duplicate signup -> 409 DUPLICATE_ACCOUNT", dup.status === 409 && dup.data.error.code === "DUPLICATE_ACCOUNT");
+
+  const login = await api("/auth/login", { method: "POST", json: { username: SMOKE_USER.username, password: SMOKE_USER.password } });
+  ok("login -> 200", login.status === 200 && !!login.data.access_token);
+
+  const bad = await api("/auth/login", { method: "POST", json: { username: SMOKE_USER.username, password: "wrong-pass-1" } });
+  ok("wrong password -> 401 INVALID_CREDENTIALS", bad.status === 401 && bad.data.error.code === "INVALID_CREDENTIALS");
+
+  const check = await api("/auth/forgot-password/check", { method: "POST", json: { identifier: SMOKE_USER.email } });
+  ok("forgot check (email) -> 200 reset_token", check.status === 200 && !!check.data.reset_token);
+
+  const byUsername = await api("/auth/forgot-password/check", { method: "POST", json: { identifier: SMOKE_USER.username } });
+  ok("forgot check (username only) -> 404 (2026-07-10 hardening)", byUsername.status === 404);
+
+  const newPw = "Smoke5678!";
+  const reset = await api("/auth/forgot-password/reset", { method: "POST", json: { reset_token: check.data.reset_token, new_password: newPw, confirm_password: newPw } });
+  ok("reset -> 204", reset.status === 204);
+
+  const relogin = await api("/auth/login", { method: "POST", json: { username: SMOKE_USER.username, password: newPw } });
+  ok("login with the new password -> 200", relogin.status === 200);
+  token = relogin.data.access_token;
+
+  const adminLogin = await api("/auth/login", { method: "POST", json: ADMIN });
+  ok("admin login -> 200 (seeded)", adminLogin.status === 200, adminLogin.data);
+  adminToken = adminLogin.data.access_token ?? "";
+}
+
+section("masters (public dropdowns)");
+const masterIds: Record<string, number> = {};
+{
+  for (const type of ["skill-levels", "cooking-methods", "categories", "equipment"]) {
+    const res = await api(`/master/${type}`, { token });
+    ok(`GET /master/${type} -> 200 with data (seeded)`, res.status === 200 && res.data.data.length > 0);
+    masterIds[type] = res.data.data[0]?.id;
+  }
+}
+
+section("recipes");
+let recipeId = 0;
+let ingredientId = 0;
+{
+  const create = await api("/recipes", {
+    method: "POST",
+    token,
+    json: {
+      recipe_name: `Smoke Curry ${TS}`,
+      description: "Smoke-test recipe",
+      cook_time_minutes: 15,
+      skill_level_id: masterIds["skill-levels"],
+      cooking_method_id: masterIds["cooking-methods"],
+      category_id: masterIds["categories"],
+      equipment_ids: [masterIds["equipment"]],
+      ingredients: [{ name: `Smoke Ingredient ${TS}`, amount: 2, unit_name: "cup" }],
+      steps: [{ step_number: 1, instruction: "Stir everything." }],
+    },
+  });
+  ok("create draft -> 201", create.status === 201 && create.data.status === "draft", create.data);
+  recipeId = create.data.recipe_id;
+  ingredientId = create.data.ingredients?.[0]?.ingredient_id ?? 0;
+
+  const early = await api(`/recipes/${recipeId}/publish`, { method: "POST", token });
+  ok("publish without cover -> 400 INCOMPLETE_RECIPE [cover_image]", early.status === 400 && early.data.error.code === "INCOMPLETE_RECIPE" && early.data.error.details?.includes("cover_image"));
+
+  const mediaForm = new FormData();
+  mediaForm.append("file", await pngFile("cover.png"));
+  mediaForm.append("type", "image");
+  mediaForm.append("is_cover", "true");
+  const media = await api(`/recipes/${recipeId}/media`, { method: "POST", token, form: mediaForm });
+  ok("upload cover -> 201 (compressed to .webp)", media.status === 201 && media.data.url?.includes(".webp"), media.data);
+
+  const publish = await api(`/recipes/${recipeId}/publish`, { method: "POST", token });
+  ok("publish -> 200 published", publish.status === 200 && publish.data.status === "published");
+
+  const feed = await api("/recipes?sort=newest", { token });
+  ok("feed contains the new recipe", feed.status === 200 && feed.data.data.some((c: { recipe_id: number }) => c.recipe_id === recipeId));
+
+  const detail = await api(`/recipes/${recipeId}`, { token });
+  ok("detail -> 200 with ingredients/steps/media", detail.status === 200 && detail.data.ingredients.length === 1 && detail.data.media.length === 1);
+
+  const patch = await api(`/recipes/${recipeId}`, { method: "PATCH", token, json: { description: "Updated by smoke" } });
+  ok("patch -> 200", patch.status === 200 && patch.data.description === "Updated by smoke");
+
+  const stepForm = new FormData();
+  stepForm.append("file", await pngFile("step.png"));
+  const stepImg = await api(`/recipes/${recipeId}/steps/1/image`, { method: "PUT", token, form: stepForm });
+  ok("step image -> 200", stepImg.status === 200 && !!stepImg.data.image_url);
+}
+
+section("search");
+{
+  const byName = await api(`/search/recipes?q=${encodeURIComponent(`Smoke Curry ${TS}`)}`, { token });
+  ok("keyword search finds it (relevance default)", byName.status === 200 && byName.data.data.some((c: { recipe_id: number }) => c.recipe_id === recipeId));
+
+  const byIngredient = await api(`/search/recipes?q=${encodeURIComponent(`Smoke Ingredient ${TS}`)}`, { token });
+  ok("keyword matches the ingredient name (expanded q)", byIngredient.status === 200 && byIngredient.data.data.some((c: { recipe_id: number }) => c.recipe_id === recipeId));
+
+  const match = await api(`/search/match?ingredient_ids=${ingredientId}`, { token });
+  const matched = match.data.data?.find((c: { recipe_id: number }) => c.recipe_id === recipeId);
+  ok("pantry match -> 100% on the single-ingredient recipe", match.status === 200 && matched?.ingredient_match?.pct === 100, matched);
+
+  const recent = await api("/search/recent", { token });
+  ok("recent searches recorded", recent.status === 200 && recent.data.keywords.length >= 1);
+
+  const delRecent = await api(`/search/recent/${encodeURIComponent(`Smoke Curry ${TS}`)}`, { method: "DELETE", token });
+  ok("delete recent -> 204", delRecent.status === 204);
+
+  const auto = await api(`/ingredients?q=${encodeURIComponent("Smoke Ingredient")}`, { token });
+  ok("ingredient autocomplete -> 200", auto.status === 200 && auto.data.data.length >= 1);
+  const units = await api("/units?q=cu", { token });
+  ok("unit autocomplete -> 200", units.status === 200);
+}
+
+section("engagement");
+{
+  const like1 = await api(`/recipes/${recipeId}/like`, { method: "PUT", token });
+  ok("like -> 200 liked", like1.status === 200 && like1.data.liked === true && like1.data.like_count === 1);
+  const like2 = await api(`/recipes/${recipeId}/like`, { method: "PUT", token });
+  ok("double like idempotent (count stays 1)", like2.data.like_count === 1);
+
+  const fav = await api(`/recipes/${recipeId}/favorite`, { method: "PUT", token });
+  ok("favorite -> 200", fav.status === 200 && fav.data.favorited === true);
+
+  const cForm = new FormData();
+  cForm.append("comment_text", "Smoke comment");
+  const created = await api(`/recipes/${recipeId}/comments`, { method: "POST", token, form: cForm });
+  ok("comment -> 201", created.status === 201 && created.data.is_mine === true);
+
+  const edited = await api(`/comments/${created.data.comment_id}`, { method: "PATCH", token, form: (() => { const f = new FormData(); f.append("comment_text", "Edited smoke comment"); return f; })() });
+  ok("edit comment -> 200 with updated_at", edited.status === 200 && edited.data.updated_at !== null);
+
+  const del = await api(`/comments/${created.data.comment_id}`, { method: "DELETE", token });
+  ok("soft delete comment -> 204", del.status === 204);
+  const list = await api(`/recipes/${recipeId}/comments`, { token });
+  ok("deleted comment hidden from the list", list.status === 200 && !list.data.data.some((c: { comment_id: number }) => c.comment_id === created.data.comment_id));
+}
+
+section("profile");
+{
+  const me = await api("/users/me", { token });
+  ok("GET /users/me -> 200", me.status === 200 && me.data.username === SMOKE_USER.username);
+
+  const saved = await api("/users/me/saved-recipes", { token });
+  ok("saved list contains the favorited recipe", saved.status === 200 && saved.data.data.some((c: { recipe_id: number }) => c.recipe_id === recipeId));
+
+  const aForm = new FormData();
+  aForm.append("file", await pngFile("avatar.png"));
+  const avatar = await api("/users/me/avatar", { method: "PUT", token, form: aForm });
+  ok("avatar upload -> 200 (webp)", avatar.status === 200 && avatar.data.profile_picture_url?.includes(".webp"));
+
+  const vis = await api(`/recipes/${recipeId}/visibility`, { method: "PATCH", token, json: { status: "private" } });
+  ok("visibility -> private", vis.status === 200 && vis.data.status === "private");
+  const own = await api("/users/me/recipes?status=private", { token });
+  ok("own private list shows it", own.status === 200 && own.data.data.some((c: { recipe_id: number }) => c.recipe_id === recipeId));
+}
+
+section("admin master");
+{
+  const asUser = await api("/admin/master/types", { token });
+  ok("admin route as normal user -> 403", asUser.status === 403);
+
+  if (adminToken) {
+    const types = await api("/admin/master/types", { token: adminToken });
+    ok("GET /admin/master/types -> 200 (5 types)", types.status === 200 && types.data.types.length === 5);
+
+    const name = `Smoke Equipment ${TS}`;
+    const created = await api("/admin/master/equipment", { method: "POST", token: adminToken, json: { name } });
+    ok("create master entry -> 201", created.status === 201 && created.data.name === name);
+
+    const dup = await api("/admin/master/equipment", { method: "POST", token: adminToken, json: { name: name.toLowerCase() } });
+    ok("case-insensitive duplicate -> 409", dup.status === 409);
+
+    const del = await api(`/admin/master/equipment/${created.data.id}`, { method: "DELETE", token: adminToken });
+    ok("soft delete -> 204", del.status === 204);
+
+    const revived = await api("/admin/master/equipment", { method: "POST", token: adminToken, json: { name } });
+    ok("re-create reactivates the same row (ADR-003)", revived.status === 201 && revived.data.id === created.data.id);
+    await api(`/admin/master/equipment/${created.data.id}`, { method: "DELETE", token: adminToken }); // leave it inactive
+  } else {
+    ok("admin flow skipped — admin login failed (run db:seed first)", false);
+  }
+}
+
+section("cleanup");
+{
+  const del = await api(`/recipes/${recipeId}`, { method: "DELETE", token });
+  ok("delete recipe -> 204 (row cascade + storage files)", del.status === 204);
+  const gone = await api(`/recipes/${recipeId}`, { token });
+  ok("detail after delete -> 404", gone.status === 404);
+}
+
+console.log(`\n${"=".repeat(40)}\nSmoke result: ${pass} passed, ${fail} failed`);
+if (fail === 0) console.log(`(note: smoke user ${SMOKE_USER.username} remains — users have no delete endpoint)`);
+process.exit(fail === 0 ? 0 : 1);
+
+export {}; // top-level await requires module context under tsc
+
