@@ -47,6 +47,23 @@ export const UpsertRecipeDTO = t.Object({
 });
 export type UpsertRecipeInput = typeof UpsertRecipeDTO.static;
 
+/**
+ * POST / PATCH /recipes — multipart (decision 2026-07-10, replaces the JSON
+ * body): `data` = JSON string matching UpsertRecipeDTO, plus optional files
+ * `cover` and `step_image_{n}` (n = step_number in data.steps), plus
+ * `publish=true` (create only) to validate + publish in the same request.
+ * step_image_{n} keys are dynamic — validated in the service.
+ */
+export const MultipartRecipeBodyDTO = t.Object({
+  data: t.Optional(
+    t.String({ description: "JSON string with the recipe fields (old JSON body)" }),
+  ),
+  cover: t.Optional(t.File({ type: "image" })),
+  publish: t.Optional(
+    t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")]),
+  ),
+});
+
 export const VisibilityDTO = t.Object({
   status: t.Union([t.Literal("published"), t.Literal("private")]),
 });

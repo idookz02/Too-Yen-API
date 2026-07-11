@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { authPlugin } from "../../shared/plugins/auth.plugin";
+import { badRequest } from "../../shared/utils/errors";
 import { recipesService } from "./services/recipes.service";
 import {
   AddMediaDTO,
@@ -7,14 +8,24 @@ import {
   FeedResponseDTO,
   MediaIdParams,
   MediaResponseDTO,
+  MultipartRecipeBodyDTO,
   RecipeDetailDTO,
   RecipeIdParams,
   StepImageBodyDTO,
   StepImageParams,
   StepImageResponseDTO,
-  UpsertRecipeDTO,
   VisibilityDTO,
 } from "./dto/recipes.dto";
+
+/** Friendly guard for the 2026-07-10 breaking change (JSON → multipart). */
+const requireMultipart = (request: Request) => {
+  if (!request.headers.get("content-type")?.includes("multipart/form-data")) {
+    throw badRequest(
+      "This endpoint requires multipart/form-data — fields: data (JSON string), cover, step_image_{n}, publish",
+      "VALIDATION_ERROR",
+    );
+  }
+};
 
 /** Module 3 — Recipes (doc/api/03-recipes.md). All routes require Bearer auth. */
 export const recipesController = new Elysia({ prefix: "/recipes" })
@@ -46,40 +57,55 @@ export const recipesController = new Elysia({ prefix: "/recipes" })
     },
   )
 
-  // POST /recipes — create draft (partial fields allowed)
+  // POST /recipes — multipart: data + cover + step images (+ publish) in one shot
   .post(
     "/",
-    async ({ body, currentUser, set }) => {
+    async ({ body, request, currentUser, set }) => {
+      requireMultipart(request);
       set.status = 201;
-      return recipesService.create(body, currentUser);
+      return recipesService.createFromMultipart(
+        body as Record<string, unknown>,
+        currentUser,
+      );
     },
     {
-      body: UpsertRecipeDTO,
+      body: MultipartRecipeBodyDTO,
       response: { 201: RecipeDetailDTO },
       detail: {
         tags: ["Recipes"],
-        summary: "Create draft",
+        summary: "Create recipe (multipart, single shot)",
         description:
-          "Save Draft works with incomplete fields (AC M1-5). ingredients[].name/unit_name are " +
-          "find-or-created case-insensitively (ADR-001/007).",
+          "multipart/form-data — data: JSON string with the recipe fields (AC M1-5: partial " +
+          "allowed; ingredients find-or-created per ADR-001/007), cover: image file, " +
+          "step_image_{n}: image for step_number n, publish=true: validate + publish " +
+          "immediately. ALL-OR-NOTHING: a failed upload or failed publish validation rolls " +
+          "the whole creation back.",
       },
     },
   )
 
-  // PATCH /recipes/{id} — edit (arrays replace the whole set)
+  // PATCH /recipes/{id} — multipart: data (+ cover / step images)
   .patch(
     "/:id",
-    ({ params, body, currentUser }) => recipesService.update(params.id, body, currentUser),
+    ({ params, body, request, currentUser }) => {
+      requireMultipart(request);
+      return recipesService.updateFromMultipart(
+        params.id,
+        body as Record<string, unknown>,
+        currentUser,
+      );
+    },
     {
       params: RecipeIdParams,
-      body: UpsertRecipeDTO,
+      body: MultipartRecipeBodyDTO,
       response: { 200: RecipeDetailDTO },
       detail: {
         tags: ["Recipes"],
-        summary: "Edit recipe",
+        summary: "Edit recipe (multipart)",
         description:
-          "Owner only. On a published recipe the update must not break completeness " +
-          "(400 INCOMPLETE_RECIPE with details[]).",
+          "Owner only; arrays in data replace the whole set. On a published recipe the update " +
+          "must not break completeness (400 INCOMPLETE_RECIPE). cover replaces the cover; " +
+          "step_image_{n} sets/replaces that step's image. publish is rejected here.",
       },
     },
   )

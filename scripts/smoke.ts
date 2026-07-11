@@ -134,21 +134,20 @@ section("recipes");
 let recipeId = 0;
 let ingredientId = 0;
 {
-  const create = await api("/recipes", {
-    method: "POST",
-    token,
-    json: {
-      recipe_name: `Smoke Curry ${TS}`,
-      description: "Smoke-test recipe",
-      cook_time_minutes: 15,
-      skill_level_id: masterIds["skill-levels"],
-      cooking_method_id: masterIds["cooking-methods"],
-      category_id: masterIds["categories"],
-      equipment_ids: [masterIds["equipment"]],
-      ingredients: [{ name: `Smoke Ingredient ${TS}`, amount: 2, unit_name: "cup" }],
-      steps: [{ step_number: 1, instruction: "Stir everything." }],
-    },
-  });
+  const recipeData = {
+    recipe_name: `Smoke Curry ${TS}`,
+    description: "Smoke-test recipe",
+    cook_time_minutes: 15,
+    skill_level_id: masterIds["skill-levels"],
+    cooking_method_id: masterIds["cooking-methods"],
+    category_id: masterIds["categories"],
+    equipment_ids: [masterIds["equipment"]],
+    ingredients: [{ name: `Smoke Ingredient ${TS}`, amount: 2, unit_name: "cup" }],
+    steps: [{ step_number: 1, instruction: "Stir everything." }],
+  };
+  const createForm = new FormData();
+  createForm.append("data", JSON.stringify(recipeData));
+  const create = await api("/recipes", { method: "POST", token, form: createForm });
   ok("create draft -> 201", create.status === 201 && create.data.status === "draft", create.data);
   recipeId = create.data.recipe_id;
   ingredientId = create.data.ingredients?.[0]?.ingredient_id ?? 0;
@@ -172,13 +171,62 @@ let ingredientId = 0;
   const detail = await api(`/recipes/${recipeId}`, { token });
   ok("detail -> 200 with ingredients/steps/media", detail.status === 200 && detail.data.ingredients.length === 1 && detail.data.media.length === 1);
 
-  const patch = await api(`/recipes/${recipeId}`, { method: "PATCH", token, json: { description: "Updated by smoke" } });
-  ok("patch -> 200", patch.status === 200 && patch.data.description === "Updated by smoke");
+  const patchForm = new FormData();
+  patchForm.append("data", JSON.stringify({ description: "Updated by smoke" }));
+  const patch = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: patchForm });
+  ok("patch (multipart data) -> 200", patch.status === 200 && patch.data.description === "Updated by smoke");
+
+  const jsonAttempt = await api(`/recipes/${recipeId}`, { method: "PATCH", token, json: { description: "old way" } });
+  ok("old JSON body -> 400 with a helpful message", jsonAttempt.status === 400 && String(jsonAttempt.data.error?.message ?? "").includes("multipart"));
 
   const stepForm = new FormData();
   stepForm.append("file", await pngFile("step.png"));
   const stepImg = await api(`/recipes/${recipeId}/steps/1/image`, { method: "PUT", token, form: stepForm });
   ok("step image -> 200", stepImg.status === 200 && !!stepImg.data.image_url);
+}
+
+section("recipes — single-shot create (multipart + publish)");
+{
+  const oneShotForm = new FormData();
+  oneShotForm.append(
+    "data",
+    JSON.stringify({
+      recipe_name: `Smoke OneShot ${TS}`,
+      description: "Created + published in one request",
+      cook_time_minutes: 5,
+      skill_level_id: masterIds["skill-levels"],
+      cooking_method_id: masterIds["cooking-methods"],
+      category_id: masterIds["categories"],
+      equipment_ids: [masterIds["equipment"]],
+      ingredients: [{ name: `Smoke Ingredient ${TS}` }],
+      steps: [{ step_number: 1, instruction: "Mix." }],
+    }),
+  );
+  oneShotForm.append("cover", await pngFile("oneshot-cover.png"));
+  oneShotForm.append("step_image_1", await pngFile("oneshot-step.png"));
+  oneShotForm.append("publish", "true");
+  const oneShot = await api("/recipes", { method: "POST", token, form: oneShotForm });
+  ok(
+    "create + cover + step image + publish in ONE request -> 201 published",
+    oneShot.status === 201 && oneShot.data.status === "published" && oneShot.data.steps?.[0]?.image_url,
+    oneShot.data,
+  );
+  if (oneShot.data?.recipe_id) {
+    const cleanup = await api(`/recipes/${oneShot.data.recipe_id}`, { method: "DELETE", token });
+    ok("one-shot recipe cleaned up -> 204", cleanup.status === 204);
+  }
+
+  // all-or-nothing: publish without a cover must not leave a recipe behind
+  const before = await api("/users/me/drafts", { token });
+  const failForm = new FormData();
+  failForm.append("data", JSON.stringify({ recipe_name: `Smoke Fail ${TS}` }));
+  failForm.append("publish", "true");
+  const failed = await api("/recipes", { method: "POST", token, form: failForm });
+  const after = await api("/users/me/drafts", { token });
+  ok(
+    "publish-incomplete one-shot -> 400 INCOMPLETE_RECIPE and NO recipe left behind",
+    failed.status === 400 && failed.data.error.code === "INCOMPLETE_RECIPE" && after.data.pagination.total === before.data.pagination.total,
+  );
 }
 
 section("search");

@@ -578,6 +578,138 @@ describe("getFeed", () => {
   });
 });
 
+// ===== multipart create/update (single-shot, decision 2026-07-10) =====
+
+describe("createFromMultipart", () => {
+  const png = () => new File(["x"], "img.png", { type: "image/png" });
+  const completeData = () =>
+    JSON.stringify({
+      recipe_name: "One Shot Curry",
+      description: "d",
+      cook_time_minutes: 10,
+      skill_level_id: 1,
+      cooking_method_id: 1,
+      category_id: 1,
+      equipment_ids: [1],
+      ingredients: [{ name: "Chili" }],
+      steps: [{ step_number: 1, instruction: "Cook" }],
+    });
+
+  it("creates draft + cover + step image in one call", async () => {
+    const res = await service.createFromMultipart(
+      { data: completeData(), cover: png(), step_image_1: png() },
+      owner,
+    );
+    expect(res.status).toBe("draft");
+    expect(res.media.filter((m) => m.is_cover)).toHaveLength(1);
+    expect(res.steps[0]!.image_url).not.toBeNull();
+  });
+
+  it("publish=true publishes in the same request", async () => {
+    const res = await service.createFromMultipart(
+      { data: completeData(), cover: png(), publish: "true" },
+      owner,
+    );
+    expect(res.status).toBe("published");
+    expect(res.published_at).not.toBeNull();
+  });
+
+  it("publish=true on an incomplete recipe rolls EVERYTHING back (all-or-nothing)", async () => {
+    const err = await expectAppError(
+      () =>
+        service.createFromMultipart(
+          { data: completeData(), publish: true }, // no cover
+          owner,
+        ),
+      400,
+      "INCOMPLETE_RECIPE",
+    );
+    expect(err.details).toEqual(["cover_image"]);
+    expect(state.recipes.size).toBe(0); // recipe deleted by the rollback
+  });
+
+  it("a failed upload rolls the creation back", async () => {
+    const failingStorage = {
+      ...makeStorage(state),
+      upload: async () => {
+        throw new Error("storage down");
+      },
+    };
+    const failing = new RecipesService({
+      repo: makeRepo(state),
+      storage: failingStorage,
+      media: passthroughMedia,
+    });
+    try {
+      await failing.createFromMultipart({ data: completeData(), cover: png() }, owner);
+      throw new Error("expected upload failure");
+    } catch (e) {
+      expect((e as Error).message).toContain("storage down");
+    }
+    expect(state.recipes.size).toBe(0);
+  });
+
+  it("step_image_{n} without a matching step -> 400 before anything is written", async () => {
+    await expectAppError(
+      () =>
+        service.createFromMultipart(
+          { data: completeData(), step_image_9: png() },
+          owner,
+        ),
+      400,
+      "VALIDATION_ERROR",
+    );
+    expect(state.recipes.size).toBe(0);
+  });
+
+  it("rejects malformed data JSON and non-image step files", async () => {
+    await expectAppError(
+      () => service.createFromMultipart({ data: "{not json" }, owner),
+      400,
+      "VALIDATION_ERROR",
+    );
+    await expectAppError(
+      () =>
+        service.createFromMultipart(
+          {
+            data: completeData(),
+            step_image_1: new File(["x"], "a.mp4", { type: "video/mp4" }),
+          },
+          owner,
+        ),
+      400,
+      "VALIDATION_ERROR",
+    );
+  });
+});
+
+describe("updateFromMultipart", () => {
+  const png = () => new File(["x"], "img.png", { type: "image/png" });
+
+  it("applies data and replaces the cover", async () => {
+    seedComplete(state);
+    const oldCover = state.media.get(1)![0]!;
+    const res = await service.updateFromMultipart(
+      1,
+      { data: JSON.stringify({ recipe_name: "Renamed" }), cover: png() },
+      owner,
+    );
+    expect(res.recipe_name).toBe("Renamed");
+    const covers = state.media.get(1)!.filter((m) => m.isCover);
+    expect(covers).toHaveLength(1);
+    expect(covers[0]!.mediaId).not.toBe(oldCover.mediaId); // new cover unset the old
+  });
+
+  it("rejects publish on PATCH", async () => {
+    seedComplete(state);
+    await expectAppError(
+      () => service.updateFromMultipart(1, { publish: "true" }, owner),
+      400,
+      "VALIDATION_ERROR",
+    );
+  });
+});
+
 // ===== create =====
 
 describe("create", () => {

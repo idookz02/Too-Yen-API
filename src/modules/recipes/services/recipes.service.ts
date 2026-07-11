@@ -18,11 +18,13 @@ import { mapRecipeCard } from "./recipe-card";
 import { badRequest, conflict, forbidden, notFound } from "../../../shared/utils/errors";
 import { parsePagination, paginated } from "../../../shared/utils/pagination";
 import type { CurrentUser } from "../../../shared/plugins/auth.plugin";
-import type {
-  AddMediaInput,
-  RecipeSort,
-  UpsertRecipeInput,
-  VisibilityInput,
+import { Value } from "@sinclair/typebox/value";
+import {
+  UpsertRecipeDTO,
+  type AddMediaInput,
+  type RecipeSort,
+  type UpsertRecipeInput,
+  type VisibilityInput,
 } from "../dto/recipes.dto";
 
 /** Publish checklist (AC M2-1) — names reported in INCOMPLETE_RECIPE details[]. */
@@ -80,6 +82,125 @@ export class RecipesService {
       throw forbidden("Draft/private recipes are visible to the owner only", "FORBIDDEN");
     }
     return this.buildDetail(card, user);
+  }
+
+  /**
+   * POST /recipes (multipart, decision 2026-07-10) — create + images (+ publish)
+   * in ONE request. All-or-nothing: any failed upload or a failed
+   * publish-validation deletes the recipe and every file already uploaded.
+   */
+  async createFromMultipart(body: Record<string, unknown>, user: CurrentUser) {
+    const { input, cover, stepImages, publish } = this.parseRecipeMultipart(body);
+
+    // pre-check before anything is written: every step_image_{n} must point
+    // at a step_number present in data.steps
+    const stepNumbers = new Set((input.steps ?? []).map((s) => s.step_number));
+    for (const n of stepImages.keys()) {
+      if (!stepNumbers.has(n)) {
+        throw badRequest(
+          `step_image_${n} has no matching step_number in data.steps`,
+          "VALIDATION_ERROR",
+        );
+      }
+    }
+
+    const created = await this.create(input, user);
+    const recipeId = created.recipe_id;
+    try {
+      if (cover) {
+        await this.addMedia(recipeId, { file: cover, type: "image", is_cover: true }, user);
+      }
+      for (const [stepNumber, file] of stepImages) {
+        await this.putStepImage(recipeId, stepNumber, file, user);
+      }
+      if (publish) return await this.publish(recipeId, user);
+      return await this.getDetail(recipeId, user);
+    } catch (e) {
+      // compensating cleanup — delete() collects storage paths and cascades
+      await this.delete(recipeId, user).catch((cleanupErr) => {
+        console.error(`[recipes] rollback of recipe ${recipeId} failed:`, cleanupErr);
+      });
+      throw e;
+    }
+  }
+
+  /**
+   * PATCH /recipes/{id} (multipart) — data + images in one request. The data
+   * update commits first; a failed image upload afterwards errors out but the
+   * data change stands (retry the image via PUT /steps/{n}/image).
+   */
+  async updateFromMultipart(recipeId: number, body: Record<string, unknown>, user: CurrentUser) {
+    const { input, cover, stepImages, publish } = this.parseRecipeMultipart(body);
+    if (publish) {
+      throw badRequest(
+        "publish is only supported when creating — use POST /recipes/{id}/publish",
+        "VALIDATION_ERROR",
+      );
+    }
+    // when data.steps replaces the set, step images must reference the new set
+    if (input.steps) {
+      const stepNumbers = new Set(input.steps.map((s) => s.step_number));
+      for (const n of stepImages.keys()) {
+        if (!stepNumbers.has(n)) {
+          throw badRequest(
+            `step_image_${n} has no matching step_number in data.steps`,
+            "VALIDATION_ERROR",
+          );
+        }
+      }
+    }
+
+    await this.update(recipeId, input, user);
+    if (cover) {
+      await this.addMedia(recipeId, { file: cover, type: "image", is_cover: true }, user);
+    }
+    for (const [stepNumber, file] of stepImages) {
+      await this.putStepImage(recipeId, stepNumber, file, user);
+    }
+    return this.getDetail(recipeId, user);
+  }
+
+  /** Parse + validate the multipart body: data JSON, cover, step_image_{n}, publish. */
+  private parseRecipeMultipart(body: Record<string, unknown>): {
+    input: UpsertRecipeInput;
+    cover?: File;
+    stepImages: Map<number, File>;
+    publish: boolean;
+  } {
+    let input: UpsertRecipeInput = {};
+    if (typeof body.data === "string" && body.data.trim() !== "") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body.data);
+      } catch {
+        throw badRequest("data must be a valid JSON string", "VALIDATION_ERROR");
+      }
+      if (!Value.Check(UpsertRecipeDTO, parsed)) {
+        const first = Value.Errors(UpsertRecipeDTO, parsed).First();
+        throw badRequest(
+          `Invalid data${first ? `: ${first.path} ${first.message}` : ""}`,
+          "VALIDATION_ERROR",
+        );
+      }
+      input = parsed;
+    }
+
+    const stepImages = new Map<number, File>();
+    for (const [key, value] of Object.entries(body)) {
+      const match = /^step_image_(\d+)$/.exec(key);
+      if (!match) continue;
+      if (!(value instanceof File) || !value.type.startsWith("image/")) {
+        throw badRequest(`${key} must be an image file`, "VALIDATION_ERROR");
+      }
+      stepImages.set(Number(match[1]), value);
+    }
+
+    return {
+      input,
+      cover: body.cover instanceof File ? body.cover : undefined,
+      stepImages,
+      publish: body.publish === true || body.publish === "true",
+    };
   }
 
   // POST /recipes — always a draft (AC M1-5: partial fields allowed)

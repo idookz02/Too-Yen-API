@@ -46,9 +46,20 @@ Response `200`: card fields above, plus:
              { "media_id": 2, "type": "video", "url": "...", "is_cover": false } ] }
 ```
 
-## POST /recipes — Create (draft)
+## POST /recipes — Create (single shot)
 
-Save Draft works with incomplete fields (AC M1-5) — send whatever is filled in.
+> **[Changed 2026-07-10 — BREAKING]** now `multipart/form-data` (the JSON body is rejected with a hint). Everything — fields, cover, step images, publish — goes in ONE request.
+
+Form fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `data` | JSON string | the recipe fields (same shape as the old JSON body below); omit for an empty draft |
+| `cover` | image file | optional — becomes the cover (compressed per the media rules) |
+| `step_image_{n}` | image file | optional — image for `step_number` n in `data.steps` (n must exist there → else `400`) |
+| `publish` | `true` | optional — validate the AC M2-1 checklist and publish immediately (`400 INCOMPLETE_RECIPE` with `details[]` when incomplete); omitted = draft (AC M1-5: partial fields allowed) |
+
+`data` shape:
 
 ```json
 { "recipe_name": "Tom Yum Goong", "description": "...", "cook_time_minutes": 30,
@@ -59,12 +70,14 @@ Save Draft works with incomplete fields (AC M1-5) — send whatever is filled in
 ```
 
 - `ingredients[].name` / `unit_name`: backend find-or-creates rows in `ingredient`/`unit` (case-insensitive dedupe, ADR-001/007)
+- **All-or-nothing:** if any image upload fails or the `publish` validation fails, the whole creation is rolled back (recipe + already-uploaded files) and the error is returned
 
-Response `201`: recipe detail (status = draft)
+Response `201`: recipe detail (status = draft, or published when `publish=true`)
 
 ## PATCH /recipes/{id}
 
-Edit a draft or own post — same body as POST (send only changed fields; `ingredients`/`steps`/`equipment_ids` replace the whole set)
+Edit a draft or own post — `multipart/form-data`, same fields as POST **except `publish`** (rejected — use `/publish`). `data` sends only changed fields; `ingredients`/`steps`/`equipment_ids` replace the whole set. `cover` replaces the cover; `step_image_{n}` sets/replaces that step's image (n must exist in the final step set).
+Note: `data` commits first — if an image upload fails afterwards, the field changes stand and the image can be retried via `PUT /recipes/{id}/steps/{n}/image`.
 Errors: `403 FORBIDDEN` (not the owner)
 
 ## POST /recipes/{id}/publish
