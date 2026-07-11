@@ -2,6 +2,8 @@
 
 References: user-profile.md | Auth: Bearer
 
+> **Implementation decisions (2026-07-10):** password policy = **min 8 chars** (same as signup) → `400 PASSWORD_POLICY_VIOLATION`; `GET /users/me/recipes` without `?status` returns **both** published + private; drafts sort by last edit, own posts by publish date.
+
 ## GET /users/me
 
 Response `200`:

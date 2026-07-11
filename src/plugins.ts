@@ -23,8 +23,16 @@ export const globalPlugins = new Elysia({ name: "global-plugins" })
             description: "Sign up, login, forgot password (Module 1)",
           },
           {
+            name: "Profile",
+            description: "My profile, avatar, saved/drafts/own lists (Module 2)",
+          },
+          {
             name: "Recipes",
             description: "Feed, CRUD, publish/visibility, media (Module 3)",
+          },
+          {
+            name: "Engagement",
+            description: "Like, favorite, comments (Module 4)",
           },
           {
             name: "Master",

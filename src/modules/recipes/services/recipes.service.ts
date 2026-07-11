@@ -10,6 +10,7 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import { mapRecipeCard } from "./recipe-card";
 import { badRequest, conflict, forbidden, notFound } from "../../../shared/utils/errors";
 import { parsePagination, paginated } from "../../../shared/utils/pagination";
 import type { CurrentUser } from "../../../shared/plugins/auth.plugin";
@@ -313,26 +314,7 @@ export class RecipesService {
   }
 
   private mapCard(row: CardRow, user: CurrentUser) {
-    return {
-      recipe_id: row.recipeId,
-      recipe_name: row.recipeName,
-      cover_image_url: row.coverPath
-        ? this.storage.publicUrl(BUCKETS.recipeMedia, row.coverPath)
-        : null,
-      author: {
-        user_id: row.authorId,
-        display_name: row.authorName,
-        tier_name: row.tierName,
-      },
-      like_count: row.likeCount,
-      favorite_count: row.favoriteCount,
-      comment_count: row.commentCount,
-      liked_by_me: row.likedByMe,
-      favorited_by_me: row.favoritedByMe,
-      is_owner: row.authorId === user.userId,
-      status: row.status,
-      published_at: row.publishedAt ? row.publishedAt.toISOString() : null,
-    };
+    return mapRecipeCard(row, user.userId, (b, p) => this.storage.publicUrl(b, p));
   }
 
   private async buildDetail(card: CardRow, user: CurrentUser) {

@@ -2,6 +2,8 @@
 
 References: home-menu.md M2/M3, post-detail.md | Auth: Bearer | Owners may engage with their own posts (ADR-008)
 
+> **Implementation decision (2026-07-10):** engagement targets **published recipes only** — like/favorite/comment (and reading comments) on a draft/private post returns `403 FORBIDDEN`, even for the owner. ADR-008's "owners may engage with their own posts" applies to own *published* posts. A soft-deleted comment keeps its image file; the Step-9 cleanup job removes orphans.
+
 ## Like
 
 - **PUT /recipes/{id}/like** — like (idempotent) → `200 { "liked": true, "like_count": 46 }` | DB trigger updates the post owner's tier automatically (ADR-012)

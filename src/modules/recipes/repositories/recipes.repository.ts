@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db, type Executor } from "../../../db";
 import {
   comment,
@@ -11,6 +11,7 @@ import {
   masterTier,
   recipe,
   recipeEquipment,
+  recipeFavorite,
   recipeIngredient,
   recipeLike,
   recipeMedia,
@@ -111,6 +112,74 @@ export class RecipesRepository {
       .select({ total: sql<number>`count(*)`.mapWith(Number) })
       .from(recipe)
       .where(eq(recipe.status, "published"));
+    return row?.total ?? 0;
+  }
+
+  /** Saved list: favorited posts, latest save first; others' private/draft filtered out (ADR-005). */
+  async listFavoritedCards(
+    userId: number,
+    opts: { limit: number; offset: number },
+    executor: Executor = db,
+  ): Promise<CardRow[]> {
+    return executor
+      .select(cardSelect(userId))
+      .from(recipeFavorite)
+      .innerJoin(recipe, eq(recipeFavorite.recipeId, recipe.recipeId))
+      .innerJoin(users, eq(recipe.userId, users.userId))
+      .leftJoin(masterTier, eq(users.tierId, masterTier.tierId))
+      .where(
+        and(
+          eq(recipeFavorite.userId, userId),
+          or(eq(recipe.status, "published"), eq(recipe.userId, userId)),
+        ),
+      )
+      .orderBy(desc(recipeFavorite.createdAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+  }
+
+  async countFavorited(userId: number, executor: Executor = db): Promise<number> {
+    const [row] = await executor
+      .select({ total: sql<number>`count(*)`.mapWith(Number) })
+      .from(recipeFavorite)
+      .innerJoin(recipe, eq(recipeFavorite.recipeId, recipe.recipeId))
+      .where(
+        and(
+          eq(recipeFavorite.userId, userId),
+          or(eq(recipe.status, "published"), eq(recipe.userId, userId)),
+        ),
+      );
+    return row?.total ?? 0;
+  }
+
+  /** Profile lists: own recipes by status. Drafts sort by last edit, posts by publish date. */
+  async listOwnCards(
+    userId: number,
+    statuses: string[],
+    orderBy: "updated" | "published",
+    opts: { limit: number; offset: number },
+    executor: Executor = db,
+  ): Promise<CardRow[]> {
+    return executor
+      .select(cardSelect(userId))
+      .from(recipe)
+      .innerJoin(users, eq(recipe.userId, users.userId))
+      .leftJoin(masterTier, eq(users.tierId, masterTier.tierId))
+      .where(and(eq(recipe.userId, userId), inArray(recipe.status, statuses)))
+      .orderBy(orderBy === "updated" ? desc(recipe.updatedAt) : desc(recipe.publishedAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+  }
+
+  async countOwn(
+    userId: number,
+    statuses: string[],
+    executor: Executor = db,
+  ): Promise<number> {
+    const [row] = await executor
+      .select({ total: sql<number>`count(*)`.mapWith(Number) })
+      .from(recipe)
+      .where(and(eq(recipe.userId, userId), inArray(recipe.status, statuses)));
     return row?.total ?? 0;
   }
 

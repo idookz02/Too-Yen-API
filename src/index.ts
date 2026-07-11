@@ -7,7 +7,9 @@ import { globalPlugins } from "./plugins";
 import { env } from "./config/environment";
 import { AppError } from "./shared/utils/errors";
 import { authController } from "./modules/auth/auth.controller";
+import { engagementController } from "./modules/engagement/engagement.controller";
 import { mastersController } from "./modules/masters/masters.controller";
+import { profileController } from "./modules/profile/profile.controller";
 import { recipesController } from "./modules/recipes/recipes.controller";
 
 export const app = new Elysia()
@@ -49,7 +51,9 @@ export const app = new Elysia()
   .use(
     new Elysia({ prefix: "/api/v1", name: "api-v1" })
       .use(authController)
+      .use(profileController)
       .use(recipesController)
+      .use(engagementController)
       .use(mastersController),
   );
 
