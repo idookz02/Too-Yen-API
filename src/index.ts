@@ -8,6 +8,7 @@ import { env } from "./config/environment";
 import { AppError } from "./shared/utils/errors";
 import { authController } from "./modules/auth/auth.controller";
 import { mastersController } from "./modules/masters/masters.controller";
+import { recipesController } from "./modules/recipes/recipes.controller";
 
 export const app = new Elysia()
   // 1. Global plugins (CORS, Swagger)
@@ -18,7 +19,13 @@ export const app = new Elysia()
   .onError({ as: "global" }, ({ code, error, set }) => {
     if (error instanceof AppError) {
       set.status = error.statusCode;
-      return { error: { code: error.code ?? "ERROR", message: error.message } };
+      return {
+        error: {
+          code: error.code ?? "ERROR",
+          message: error.message,
+          ...(error.details !== undefined ? { details: error.details } : {}),
+        },
+      };
     }
     if (code === "VALIDATION") {
       set.status = 400;
@@ -42,6 +49,7 @@ export const app = new Elysia()
   .use(
     new Elysia({ prefix: "/api/v1", name: "api-v1" })
       .use(authController)
+      .use(recipesController)
       .use(mastersController),
   );
 

@@ -2,6 +2,12 @@
 
 References: home-menu.md, create-new-recipe.md, post-detail.md | Auth: Bearer
 
+> **Implementation decisions (2026-07-10):**
+> - **Bearer on every route** (including the feed) — per doc/api/README.md; no anonymous browsing.
+> - **Integrity guard:** mutations on a *published* recipe must not break the publish checklist — `PATCH` that empties a required set, or deleting the cover image, returns `400 INCOMPLETE_RECIPE` with `details[]`. To gut a post, switch it to `private` first.
+> - **/publish is draft-only** — re-publishing a `private` post goes through `PATCH /visibility` (which re-validates completeness); publishing an already-published post → `400 INVALID_STATUS`.
+> - Replacing `steps` preserves existing step images by `step_number`; images of removed steps are deleted from storage.
+
 ## GET /recipes — Home feed
 
 Query: `sort=newest|most_liked|most_favorited` (default newest — AC 6/7), `page`, `limit`

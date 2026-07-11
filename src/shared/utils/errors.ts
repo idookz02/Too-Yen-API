@@ -7,14 +7,16 @@ export class AppError extends Error {
     public readonly statusCode: number,
     message: string,
     public readonly code?: string,
+    /** Extra payload for the envelope, e.g. INCOMPLETE_RECIPE missing-field list. */
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = "AppError";
   }
 }
 
-export const badRequest = (msg: string, code?: string) =>
-  new AppError(400, msg, code);
+export const badRequest = (msg: string, code?: string, details?: unknown) =>
+  new AppError(400, msg, code, details);
 export const unauthorized = (msg: string, code?: string) =>
   new AppError(401, msg, code);
 export const forbidden = (msg: string, code?: string) =>

@@ -23,6 +23,10 @@ export const globalPlugins = new Elysia({ name: "global-plugins" })
             description: "Sign up, login, forgot password (Module 1)",
           },
           {
+            name: "Recipes",
+            description: "Feed, CRUD, publish/visibility, media (Module 3)",
+          },
+          {
             name: "Master",
             description: "Public master-data dropdowns (Module 6)",
           },
