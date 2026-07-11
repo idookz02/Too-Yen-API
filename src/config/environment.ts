@@ -22,6 +22,10 @@ export const env = {
   get JWT_SECRET(): string {
     return required("JWT_SECRET");
   },
+  // access-token TTL (@elysiajs/jwt `exp` format) — decided 2026-07-10: 24h
+  get JWT_EXPIRES_IN(): string {
+    return process.env.JWT_EXPIRES_IN ?? "24h";
+  },
   get PORT(): number {
     return Number(process.env.PORT ?? 3000);
   },

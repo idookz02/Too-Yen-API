@@ -8,3 +8,6 @@
  */
 process.env.DATABASE_URL ??=
   "postgresql://user:pass@localhost:5432/too_yen_test";
+
+// jwt plugins read JWT_SECRET at import time (auth controller pulls them in)
+process.env.JWT_SECRET ??= "test-secret-not-for-production";

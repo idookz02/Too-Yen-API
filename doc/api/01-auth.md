@@ -32,6 +32,7 @@ Errors: `401 INVALID_CREDENTIALS` (AC 4 — stay on the login page)
 ## POST /auth/forgot-password/check
 
 Verify the account exists (AC 2) — accepts email or username
+> **[Amended 2026-07-10]** `identifier` must be the account **email** — a username alone no longer issues a reset token. Rationale: the in-app reset has no email-verification step, so anyone knowing a public username could take over the account; requiring the full email raises the bar. A username-only identifier returns `404 ACCOUNT_NOT_FOUND`.
 
 ```json
 { "identifier": "a@b.com" }
@@ -50,3 +51,5 @@ Response `204` → frontend redirects to the Login page (AC 6)
 Errors: `400 PASSWORD_MISMATCH` (AC 5), `401 INVALID_RESET_TOKEN`
 
 > Note: the original spec defines an in-app reset with no email step — `reset_token` is short-lived (e.g. 10 minutes) to prevent calling reset directly without passing check.
+
+> **Implementation decisions (2026-07-10):** `access_token` is a JWT with `sub` = user_id and a `role` claim, TTL **24h** (env `JWT_EXPIRES_IN`); no refresh endpoint. `reset_token` is a stateless **10-minute JWT** carrying a `purpose: password_reset` claim (an access token cannot be replayed as a reset token); it is not single-use — acceptable within the 10-minute window for this project.

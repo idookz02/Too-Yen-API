@@ -6,6 +6,7 @@ import { Elysia } from "elysia";
 import { globalPlugins } from "./plugins";
 import { env } from "./config/environment";
 import { AppError } from "./shared/utils/errors";
+import { authController } from "./modules/auth/auth.controller";
 import { mastersController } from "./modules/masters/masters.controller";
 
 export const app = new Elysia()
@@ -38,7 +39,11 @@ export const app = new Elysia()
     detail: { summary: "Health check" },
   })
   // 4. Feature modules — all mounted under /api/v1 (doc/api/README.md)
-  .use(new Elysia({ prefix: "/api/v1", name: "api-v1" }).use(mastersController));
+  .use(
+    new Elysia({ prefix: "/api/v1", name: "api-v1" })
+      .use(authController)
+      .use(mastersController),
+  );
 
 // Listen only when run directly (not when imported by tests)
 if (import.meta.main) {

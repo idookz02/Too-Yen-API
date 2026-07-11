@@ -19,10 +19,19 @@ export const globalPlugins = new Elysia({ name: "global-plugins" })
         },
         tags: [
           {
+            name: "Auth",
+            description: "Sign up, login, forgot password (Module 1)",
+          },
+          {
             name: "Master",
             description: "Public master-data dropdowns (Module 6)",
           },
         ],
+        components: {
+          securitySchemes: {
+            BearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+          },
+        },
       },
     }),
   );
