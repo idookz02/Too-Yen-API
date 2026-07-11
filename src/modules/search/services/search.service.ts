@@ -1,5 +1,6 @@
 import {
   searchRepository,
+  type MatchCardRow,
   type SearchFilters,
   type SearchRepository,
 } from "../repositories/search.repository";
@@ -8,9 +9,10 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import { badRequest } from "../../../shared/utils/errors";
 import { paginated, parsePagination } from "../../../shared/utils/pagination";
 import type { CurrentUser } from "../../../shared/plugins/auth.plugin";
-import type { SearchQueryInput } from "../dto/search.dto";
+import type { MatchQueryInput, SearchQueryInput } from "../dto/search.dto";
 
 export const RECENT_SEARCH_LIMIT = 10; // decision 2026-07-10
 const AUTOCOMPLETE_DEFAULT = 10;
@@ -59,6 +61,63 @@ export class SearchService {
       limit,
       total,
     );
+  }
+
+  /**
+   * GET /search/match — pantry match (decision 2026-07-10): given what I have,
+   * rank published recipes by how much of each recipe I can cover.
+   * % per dimension = matched ÷ recipe total; match_pct = average of the
+   * provided dimensions; recipes need ≥ 1 matched item, sorted best-first.
+   */
+  async match(query: MatchQueryInput, user: CurrentUser) {
+    const ingredientIds = parseCsvIds(query.ingredient_ids);
+    const equipmentIds = parseCsvIds(query.equipment_ids);
+    if (ingredientIds.length === 0 && equipmentIds.length === 0) {
+      throw badRequest(
+        "Provide ingredient_ids and/or equipment_ids",
+        "VALIDATION_ERROR",
+      );
+    }
+
+    const { page, limit, offset } = parsePagination(query);
+    const input = { ingredientIds, equipmentIds, minMatch: query.min_match };
+    const [rows, total] = await Promise.all([
+      this.repo.matchCards(input, { limit, offset }, user.userId),
+      this.repo.countMatch(input),
+    ]);
+
+    const useIng = ingredientIds.length > 0;
+    const useEq = equipmentIds.length > 0;
+    return paginated(
+      rows.map((r) => this.mapMatchCard(r, user, useIng, useEq)),
+      page,
+      limit,
+      total,
+    );
+  }
+
+  private mapMatchCard(
+    row: MatchCardRow,
+    user: CurrentUser,
+    useIng: boolean,
+    useEq: boolean,
+  ) {
+    const stat = (matched: number, total: number) => ({
+      matched,
+      total,
+      pct: total > 0 ? Math.round((100 * matched) / total) : 0,
+    });
+    const ingredient_match = useIng ? stat(row.ingMatched, row.ingTotal) : null;
+    const equipment_match = useEq ? stat(row.eqMatched, row.eqTotal) : null;
+    const pcts = [ingredient_match?.pct, equipment_match?.pct].filter(
+      (p): p is number => p !== undefined,
+    );
+    return {
+      ...mapRecipeCard(row, user.userId, (b, p) => this.storage.publicUrl(b, p)),
+      ingredient_match,
+      equipment_match,
+      match_pct: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length),
+    };
   }
 
   // GET /search/recent — latest first, capped at 10 (decision 2026-07-10)

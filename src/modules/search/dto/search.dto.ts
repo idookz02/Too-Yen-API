@@ -1,6 +1,6 @@
 import { t } from "elysia";
 import { PaginationQueryDTO } from "../../../shared/utils/pagination";
-import { RECIPE_SORTS } from "../../recipes/dto/recipes.dto";
+import { RECIPE_SORTS, RecipeCardDTO } from "../../recipes/dto/recipes.dto";
 
 // ============================================================================
 // Request DTOs (doc/api/05-search.md)
@@ -39,6 +39,23 @@ export const SearchQueryDTO = t.Composite([
 ]);
 export type SearchQueryInput = typeof SearchQueryDTO.static;
 
+/** GET /search/match — pantry match (decision 2026-07-10). ≥1 of the two lists required. */
+export const MatchQueryDTO = t.Composite([
+  PaginationQueryDTO,
+  t.Object({
+    ingredient_ids: t.Optional(
+      t.String({ pattern: CSV_IDS, description: "CSV — ingredients I have", examples: ["5,8,12"] }),
+    ),
+    equipment_ids: t.Optional(
+      t.String({ pattern: CSV_IDS, description: "CSV — equipment I have", examples: ["1,4"] }),
+    ),
+    min_match: t.Optional(
+      t.Numeric({ minimum: 0, maximum: 100, description: "Overall match_pct floor" }),
+    ),
+  }),
+]);
+export type MatchQueryInput = typeof MatchQueryDTO.static;
+
 export const RecentKeywordParams = t.Object({ keyword: t.String({ minLength: 1 }) });
 
 export const AutocompleteQueryDTO = t.Object({
@@ -49,6 +66,33 @@ export const AutocompleteQueryDTO = t.Object({
 // ============================================================================
 // Response DTOs
 // ============================================================================
+
+const MatchStatDTO = t.Object({
+  matched: t.Number({ description: "Items of the recipe I have" }),
+  total: t.Number({ description: "Items the recipe needs" }),
+  pct: t.Number({ description: "matched / total × 100, rounded" }),
+});
+
+export const MatchResponseDTO = t.Object({
+  data: t.Array(
+    t.Composite([
+      RecipeCardDTO,
+      t.Object({
+        ingredient_match: t.Union([MatchStatDTO, t.Null()]),
+        equipment_match: t.Union([MatchStatDTO, t.Null()]),
+        match_pct: t.Number({
+          description: "Average of the provided dimensions' pct",
+        }),
+      }),
+    ]),
+  ),
+  pagination: t.Object({
+    page: t.Number(),
+    limit: t.Number(),
+    total: t.Number(),
+    total_pages: t.Number(),
+  }),
+});
 
 export const RecentSearchResponseDTO = t.Object({
   keywords: t.Array(

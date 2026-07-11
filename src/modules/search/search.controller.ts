@@ -5,6 +5,8 @@ import { FeedResponseDTO } from "../recipes/dto/recipes.dto";
 import {
   AutocompleteQueryDTO,
   IngredientAutocompleteDTO,
+  MatchQueryDTO,
+  MatchResponseDTO,
   RecentKeywordParams,
   RecentSearchResponseDTO,
   SearchQueryDTO,
@@ -28,6 +30,25 @@ export const searchController = new Elysia()
         description:
           "All filters AND-combined (AC 4). ingredient_ids = recipe contains ALL; " +
           "equipment_ids = uses ANY. A non-empty q is saved to recent searches.",
+      },
+    },
+  )
+
+  // GET /search/match — pantry match with match percentages
+  .get(
+    "/search/match",
+    ({ query, currentUser }) => searchService.match(query, currentUser),
+    {
+      query: MatchQueryDTO,
+      response: { 200: MatchResponseDTO },
+      detail: {
+        tags: ["Search"],
+        summary: "Match recipes against my ingredients/equipment",
+        description:
+          "Rank published recipes by how much of each recipe the given ingredient_ids/" +
+          "equipment_ids cover (% = matched ÷ recipe total per dimension; match_pct = average " +
+          "of the provided dimensions). Needs ≥ 1 matched item; sorted match_pct desc, " +
+          "then newest. Optional min_match=0-100 floor. At least one list is required.",
       },
     },
   )

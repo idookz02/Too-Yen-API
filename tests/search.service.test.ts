@@ -4,7 +4,10 @@
  */
 import { beforeEach, describe, expect, it } from "bun:test";
 import { RECENT_SEARCH_LIMIT, SearchService } from "../src/modules/search/services/search.service";
+import { AppError } from "../src/shared/utils/errors";
 import type {
+  MatchCardRow,
+  MatchInput,
   SearchFilters,
   SearchRepository,
 } from "../src/modules/search/repositories/search.repository";
@@ -29,12 +32,14 @@ const cardRow = (over: Partial<CardRow> = {}): CardRow => ({
 
 type State = {
   capturedFilters: SearchFilters[];
+  capturedMatch: MatchInput[];
   upserts: { userId: number; keyword: string }[];
   recentCalls: number[];
   recent: { keyword: string; searchedAt: Date }[];
   deleted: string[];
   autocompleteCalls: { q: string; limit: number }[];
   rows: CardRow[];
+  matchRows: MatchCardRow[];
 };
 
 let state: State;
@@ -43,12 +48,14 @@ let service: SearchService;
 beforeEach(() => {
   state = {
     capturedFilters: [],
+    capturedMatch: [],
     upserts: [],
     recentCalls: [],
     recent: [],
     deleted: [],
     autocompleteCalls: [],
     rows: [],
+    matchRows: [],
   };
   const repo = {
     searchCards: async (filters: SearchFilters) => {
@@ -56,6 +63,11 @@ beforeEach(() => {
       return state.rows;
     },
     countSearch: async () => state.rows.length,
+    matchCards: async (input: MatchInput) => {
+      state.capturedMatch.push(input);
+      return state.matchRows;
+    },
+    countMatch: async () => state.matchRows.length,
     upsertRecent: async (userId: number, keyword: string) => {
       state.upserts.push({ userId, keyword });
     },
@@ -135,6 +147,73 @@ describe("search", () => {
       is_owner: false,
       cover_image_url: "https://cdn.test/recipe-media/1/cover.webp",
     });
+  });
+});
+
+describe("match (pantry search)", () => {
+  const matchRow = (over: Partial<MatchCardRow> = {}): MatchCardRow => ({
+    ...cardRow(),
+    ingMatched: 4,
+    ingTotal: 5,
+    eqMatched: 1,
+    eqTotal: 2,
+    ...over,
+  });
+
+  it("400 when neither list is provided", async () => {
+    try {
+      await service.match({}, user);
+      throw new Error("expected AppError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(AppError);
+      expect((e as AppError).code).toBe("VALIDATION_ERROR");
+    }
+  });
+
+  it("computes per-dimension pct against the recipe and averages match_pct", async () => {
+    state.matchRows = [matchRow()]; // 4/5 = 80%, 1/2 = 50%
+    const res = await service.match(
+      { ingredient_ids: "5,8,12", equipment_ids: "1,4" },
+      user,
+    );
+    expect(res.data[0]).toMatchObject({
+      ingredient_match: { matched: 4, total: 5, pct: 80 },
+      equipment_match: { matched: 1, total: 2, pct: 50 },
+      match_pct: 65, // (80 + 50) / 2
+    });
+  });
+
+  it("a single dimension yields that pct and null for the other", async () => {
+    state.matchRows = [matchRow({ eqMatched: 0, eqTotal: 3 })];
+    const res = await service.match({ ingredient_ids: "5,8" }, user);
+    expect(res.data[0]).toMatchObject({
+      ingredient_match: { matched: 4, total: 5, pct: 80 },
+      equipment_match: null,
+      match_pct: 80,
+    });
+  });
+
+  it("passes parsed ids and min_match to the repository", async () => {
+    await service.match(
+      { ingredient_ids: "5,5,8", equipment_ids: "1", min_match: 50 },
+      user,
+    );
+    expect(state.capturedMatch[0]).toEqual({
+      ingredientIds: [5, 8],
+      equipmentIds: [1],
+      minMatch: 50,
+    });
+  });
+
+  it("keeps the recipe-card shape alongside the match fields", async () => {
+    state.matchRows = [matchRow()];
+    const res = await service.match({ ingredient_ids: "5" }, user);
+    expect(res.data[0]).toMatchObject({
+      recipe_id: 1,
+      cover_image_url: "https://cdn.test/recipe-media/1/cover.webp",
+      author: { display_name: "Sak" },
+    });
+    expect(res.pagination.total).toBe(1);
   });
 });
 

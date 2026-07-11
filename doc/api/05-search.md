@@ -22,6 +22,25 @@ Query params (all optional):
 
 Response `200`: paginated recipe cards (same shape as 03-recipes) — no matches returns `data: []` so the frontend shows the no-result message (AC 6)
 
+## GET /search/match — pantry match (added 2026-07-10)
+
+Rank published recipes by how much of each recipe the caller's items cover — "what can I cook with what I have". At least one of the two lists is required (`400 VALIDATION_ERROR` otherwise).
+
+Query params: `ingredient_ids` (CSV), `equipment_ids` (CSV), `min_match` (0–100 floor on the overall pct), `page`, `limit`
+
+- % per dimension = matched ÷ the **recipe's** total (a recipe needing 5 ingredients where you have 4 → 80%)
+- `match_pct` = average of the provided dimensions; results need ≥ 1 matched item, sorted `match_pct` desc then newest
+
+Response `200`: recipe cards (03-recipes shape) each extended with:
+
+```json
+{ "ingredient_match": { "matched": 4, "total": 5, "pct": 80 },
+  "equipment_match": { "matched": 1, "total": 2, "pct": 50 },
+  "match_pct": 65 }
+```
+
+`ingredient_match` / `equipment_match` is `null` when that list wasn't provided.
+
 ## Recent searches (AC M5-2/3/4)
 
 - **GET /search/recent** → `200 { "keywords": [ { "keyword": "tom yum", "searched_at": "..." } ] }` — latest first
