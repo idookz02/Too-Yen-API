@@ -9,6 +9,10 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import {
+  mediaProcessingService,
+  type MediaProcessingService,
+} from "../../../shared/services/media-processing.service";
 import { hashPassword, verifyPassword } from "../../../shared/utils/password";
 import {
   badRequest,
@@ -45,15 +49,18 @@ export type AuthServiceDeps = {
     | "updateProfilePicturePath"
   >;
   storage?: Pick<StorageService, "upload" | "publicUrl">;
+  media?: Pick<MediaProcessingService, "processImage">;
 };
 
 export class AuthService {
   private readonly repo: NonNullable<AuthServiceDeps["repo"]>;
   private readonly storage: NonNullable<AuthServiceDeps["storage"]>;
+  private readonly media: NonNullable<AuthServiceDeps["media"]>;
 
   constructor(deps: AuthServiceDeps = {}) {
     this.repo = deps.repo ?? authRepository;
     this.storage = deps.storage ?? storageService;
+    this.media = deps.media ?? mediaProcessingService;
   }
 
   // POST /auth/signup
@@ -73,8 +80,9 @@ export class AuthService {
     });
 
     if (input.profile_picture) {
-      const path = buildObjectPath(created.userId, input.profile_picture);
-      await this.storage.upload(BUCKETS.avatars, path, input.profile_picture);
+      const processed = await this.media.processImage(input.profile_picture, "avatar");
+      const path = buildObjectPath(created.userId, processed);
+      await this.storage.upload(BUCKETS.avatars, path, processed);
       await this.repo.updateProfilePicturePath(created.userId, path);
     }
 

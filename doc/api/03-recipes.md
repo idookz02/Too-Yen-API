@@ -7,6 +7,7 @@ References: home-menu.md, create-new-recipe.md, post-detail.md | Auth: Bearer
 > - **Integrity guard:** mutations on a *published* recipe must not break the publish checklist — `PATCH` that empties a required set, or deleting the cover image, returns `400 INCOMPLETE_RECIPE` with `details[]`. To gut a post, switch it to `private` first.
 > - **/publish is draft-only** — re-publishing a `private` post goes through `PATCH /visibility` (which re-validates completeness); publishing an already-published post → `400 INVALID_STATUS`.
 > - Replacing `steps` preserves existing step images by `step_number`; images of removed steps are deleted from storage.
+> - **Upload compression:** media images → WebP 1600px, step images → WebP 1280px; videos → 720p H.264 when ffmpeg is configured (see doc/api/README.md). Caps: image ≤ 5 MB, video ≤ 50 MB → `400 FILE_TOO_LARGE`.
 
 ## GET /recipes — Home feed
 

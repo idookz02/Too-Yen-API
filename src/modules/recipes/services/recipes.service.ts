@@ -10,6 +10,10 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import {
+  mediaProcessingService,
+  type MediaProcessingService,
+} from "../../../shared/services/media-processing.service";
 import { mapRecipeCard } from "./recipe-card";
 import { badRequest, conflict, forbidden, notFound } from "../../../shared/utils/errors";
 import { parsePagination, paginated } from "../../../shared/utils/pagination";
@@ -40,15 +44,18 @@ const missingFields = (c: Completeness): string[] => {
 export type RecipesServiceDeps = {
   repo?: RecipesRepository;
   storage?: Pick<StorageService, "upload" | "remove" | "publicUrl">;
+  media?: Pick<MediaProcessingService, "processImage" | "processVideo">;
 };
 
 export class RecipesService {
   private readonly repo: RecipesRepository;
   private readonly storage: NonNullable<RecipesServiceDeps["storage"]>;
+  private readonly media: NonNullable<RecipesServiceDeps["media"]>;
 
   constructor(deps: RecipesServiceDeps = {}) {
     this.repo = deps.repo ?? recipesRepository;
     this.storage = deps.storage ?? storageService;
+    this.media = deps.media ?? mediaProcessingService;
   }
 
   // GET /recipes — published feed
@@ -227,10 +234,16 @@ export class RecipesService {
       throw conflict("A recipe can have at most one video", "VIDEO_LIMIT");
     }
 
+    // compress before storing (decision 2026-07-10): images → WebP preset,
+    // videos → 720p H.264 when ffmpeg is available
+    const processed =
+      input.type === "image"
+        ? await this.media.processImage(input.file, "recipeMedia")
+        : await this.media.processVideo(input.file);
     const path = await this.storage.upload(
       BUCKETS.recipeMedia,
-      buildObjectPath(recipeId, input.file),
-      input.file,
+      buildObjectPath(recipeId, processed),
+      processed,
     );
     const created = await this.repo.transaction(async (tx) => {
       if (isCover) await this.repo.unsetCover(recipeId, tx); // new cover unsets old
@@ -280,10 +293,11 @@ export class RecipesService {
     const step = await this.repo.findStep(recipeId, stepNumber);
     if (!step) throw notFound("Step not found", "STEP_NOT_FOUND");
 
+    const processed = await this.media.processImage(file, "stepImage");
     const path = await this.storage.upload(
       BUCKETS.recipeMedia,
-      buildObjectPath(recipeId, file),
-      file,
+      buildObjectPath(recipeId, processed),
+      processed,
     );
     await this.repo.updateStepImage(step.stepId, path);
     if (step.imagePath) await this.storage.remove(BUCKETS.recipeMedia, [step.imagePath]);

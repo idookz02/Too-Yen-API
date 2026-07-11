@@ -9,6 +9,10 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import {
+  mediaProcessingService,
+  type MediaProcessingService,
+} from "../../../shared/services/media-processing.service";
 import { badRequest, forbidden, notFound } from "../../../shared/utils/errors";
 import { paginated, parsePagination } from "../../../shared/utils/pagination";
 import type { CurrentUser } from "../../../shared/plugins/auth.plugin";
@@ -17,15 +21,18 @@ import type { CreateCommentInput, UpdateCommentInput } from "../dto/engagement.d
 export type EngagementServiceDeps = {
   repo?: EngagementRepository;
   storage?: Pick<StorageService, "upload" | "remove" | "publicUrl">;
+  media?: Pick<MediaProcessingService, "processImage">;
 };
 
 export class EngagementService {
   private readonly repo: EngagementRepository;
   private readonly storage: NonNullable<EngagementServiceDeps["storage"]>;
+  private readonly media: NonNullable<EngagementServiceDeps["media"]>;
 
   constructor(deps: EngagementServiceDeps = {}) {
     this.repo = deps.repo ?? engagementRepository;
     this.storage = deps.storage ?? storageService;
+    this.media = deps.media ?? mediaProcessingService;
   }
 
   // ===== like =====
@@ -80,10 +87,11 @@ export class EngagementService {
       commentText: input.comment_text,
     });
     if (input.image) {
+      const processed = await this.media.processImage(input.image, "commentImage");
       const path = await this.storage.upload(
         BUCKETS.commentImages,
-        buildObjectPath(created.commentId, input.image),
-        input.image,
+        buildObjectPath(created.commentId, processed),
+        processed,
       );
       await this.repo.updateCommentImage(created.commentId, path);
     }
@@ -106,10 +114,11 @@ export class EngagementService {
 
     let imagePath: string | null | undefined; // undefined = keep as-is
     if (input.image) {
+      const processed = await this.media.processImage(input.image, "commentImage");
       imagePath = await this.storage.upload(
         BUCKETS.commentImages,
-        buildObjectPath(commentId, input.image),
-        input.image,
+        buildObjectPath(commentId, processed),
+        processed,
       );
     } else if (removeImage) {
       imagePath = null;

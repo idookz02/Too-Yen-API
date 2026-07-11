@@ -243,12 +243,22 @@ const expectAppError = async (fn: () => Promise<unknown>, status: number, code: 
   }
 };
 
+/** Media passthrough — compression itself is covered in media-processing.test.ts */
+const passthroughMedia = {
+  processImage: async (f: File) => f,
+  processVideo: async (f: File) => f,
+};
+
 let state: State;
 let service: RecipesService;
 
 beforeEach(() => {
   state = emptyState();
-  service = new RecipesService({ repo: makeRepo(state), storage: makeStorage(state) });
+  service = new RecipesService({
+    repo: makeRepo(state),
+    storage: makeStorage(state),
+    media: passthroughMedia,
+  });
 });
 
 // ===== publish validation matrix =====

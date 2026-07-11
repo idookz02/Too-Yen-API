@@ -32,4 +32,5 @@ Base URL: `/api/v1` | References: data-dictionary-en.md, ADR-001–012 | 2026-07
 - HTTP status: 200 OK, 201 created, 204 deleted/no body, 400 validation, 401 unauthenticated, 403 forbidden, 404 not found, 409 conflict/duplicate
 - **Timestamps**: ISO 8601 UTC (`2026-07-09T08:00:00Z`)
 - **Media**: responses return a full `url` (backend builds it from bucket + object_path per ADR-009); uploads go through the backend only (service_role key, ADR-010)
+- **Upload compression (2026-07-10)**: images are resized server-side (avatar 512px, recipe media 1600px, step/comment 1280px long edge, no upscale) and stored as **WebP q80**; videos are transcoded to **720p H.264** when ffmpeg is available (env `FFMPEG_PATH`), else stored as-is. Input caps before compression: image ≤ 5 MB, video ≤ 50 MB → `400 FILE_TOO_LARGE`
 - **Visibility rules**: draft/private posts are visible to the owner only; hard delete removes all engagement (ADR-005)

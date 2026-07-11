@@ -14,6 +14,10 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import {
+  mediaProcessingService,
+  type MediaProcessingService,
+} from "../../../shared/services/media-processing.service";
 import { hashPassword } from "../../../shared/utils/password";
 import { badRequest, notFound } from "../../../shared/utils/errors";
 import { paginated, parsePagination } from "../../../shared/utils/pagination";
@@ -29,17 +33,20 @@ export type ProfileServiceDeps = {
     "listFavoritedCards" | "countFavorited" | "listOwnCards" | "countOwn"
   >;
   storage?: Pick<StorageService, "upload" | "remove" | "publicUrl">;
+  media?: Pick<MediaProcessingService, "processImage">;
 };
 
 export class ProfileService {
   private readonly repo: NonNullable<ProfileServiceDeps["repo"]>;
   private readonly recipesRepo: NonNullable<ProfileServiceDeps["recipesRepo"]>;
   private readonly storage: NonNullable<ProfileServiceDeps["storage"]>;
+  private readonly media: NonNullable<ProfileServiceDeps["media"]>;
 
   constructor(deps: ProfileServiceDeps = {}) {
     this.repo = deps.repo ?? profileRepository;
     this.recipesRepo = deps.recipesRepo ?? recipesRepository;
     this.storage = deps.storage ?? storageService;
+    this.media = deps.media ?? mediaProcessingService;
   }
 
   // GET /users/me
@@ -74,10 +81,11 @@ export class ProfileService {
     if (!current) throw notFound("User not found", "USER_NOT_FOUND");
     const oldPath = current.user.profilePicturePath; // capture before any mutation
 
+    const processed = await this.media.processImage(file, "avatar");
     const path = await this.storage.upload(
       BUCKETS.avatars,
-      buildObjectPath(user.userId, file),
-      file,
+      buildObjectPath(user.userId, processed),
+      processed,
     );
     await this.repo.updateAvatarPath(user.userId, path);
     if (oldPath) await this.storage.remove(BUCKETS.avatars, [oldPath]);

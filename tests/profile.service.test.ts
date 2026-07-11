@@ -94,6 +94,7 @@ beforeEach(() => {
       },
       publicUrl: (bucket: string, path: string) => `https://cdn.test/${bucket}/${path}`,
     } as never,
+    media: { processImage: async (f: File) => f },
   });
 });
 
