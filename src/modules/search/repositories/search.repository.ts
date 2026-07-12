@@ -251,6 +251,31 @@ export class SearchRepository {
       .where(and(eq(recentSearch.userId, userId), eq(recentSearch.keyword, keyword)));
   }
 
+  /**
+   * Resolve a detected ingredient (image search) to a DB row — tries each
+   * candidate name with an exact case-insensitive match first, then substring.
+   */
+  async findIngredientByAnyName(
+    candidates: string[],
+    executor: Executor = db,
+  ): Promise<{ ingredientId: number; name: string } | null> {
+    for (const name of candidates.map((c) => c.trim()).filter(Boolean)) {
+      const exact = await executor
+        .select({ ingredientId: ingredient.ingredientId, name: ingredient.name })
+        .from(ingredient)
+        .where(sql`lower(${ingredient.name}) = lower(${name})`)
+        .limit(1);
+      if (exact[0]) return exact[0];
+      const partial = await executor
+        .select({ ingredientId: ingredient.ingredientId, name: ingredient.name })
+        .from(ingredient)
+        .where(ilike(ingredient.name, `%${name}%`))
+        .limit(1);
+      if (partial[0]) return partial[0];
+    }
+    return null;
+  }
+
   // ===== autocomplete (prefix ILIKE) =====
 
   async autocompleteIngredients(q: string, limit: number, executor: Executor = db) {

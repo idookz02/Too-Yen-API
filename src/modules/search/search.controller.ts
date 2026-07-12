@@ -1,9 +1,12 @@
 import { Elysia } from "elysia";
 import { authPlugin } from "../../shared/plugins/auth.plugin";
+import { rateLimit } from "../../shared/plugins/rate-limit.plugin";
 import { searchService } from "./services/search.service";
 import { FeedResponseDTO } from "../recipes/dto/recipes.dto";
 import {
   AutocompleteQueryDTO,
+  ByImageBodyDTO,
+  ByImageResponseDTO,
   IngredientAutocompleteDTO,
   MatchQueryDTO,
   MatchResponseDTO,
@@ -12,6 +15,36 @@ import {
   SearchQueryDTO,
   UnitAutocompleteDTO,
 } from "./dto/search.dto";
+
+/**
+ * POST /search/by-image lives on its own instance so the rate limit applies
+ * to it alone — every call costs real money (GPT-4o-mini).
+ */
+export const imageSearchController = new Elysia()
+  .use(
+    rateLimit({
+      name: "image-search",
+      max: Number(process.env.RATE_LIMIT_IMAGE_SEARCH_MAX ?? 5),
+    }),
+  )
+  .use(authPlugin)
+  .post(
+    "/search/by-image",
+    ({ body, currentUser }) => searchService.searchByImage(body.image, currentUser),
+    {
+      body: ByImageBodyDTO,
+      response: { 200: ByImageResponseDTO },
+      detail: {
+        tags: ["Search"],
+        summary: "Search recipes from a food photo",
+        description:
+          "One-shot: GPT-4o-mini identifies the dish + ingredients, then searches — " +
+          "dish-name keyword hits first (relevance), then pantry matches on detected " +
+          "ingredients. Rate-limited (5/min per IP). 503 FEATURE_DISABLED without " +
+          "OPENAI_API_KEY; 502 VISION_API_ERROR on upstream failures.",
+      },
+    },
+  );
 
 /** Module 5 — Search (doc/api/05-search.md). Bearer on all routes; published posts only. */
 export const searchController = new Elysia()

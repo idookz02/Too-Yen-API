@@ -33,4 +33,8 @@ export const env = {
   get FFMPEG_PATH(): string | undefined {
     return process.env.FFMPEG_PATH;
   },
+  // optional — image-based recipe search is disabled (503) when absent
+  get OPENAI_API_KEY(): string | undefined {
+    return process.env.OPENAI_API_KEY;
+  },
 };

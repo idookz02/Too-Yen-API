@@ -9,6 +9,14 @@ import {
   storageService,
   type StorageService,
 } from "../../../shared/services/storage.service";
+import {
+  mediaProcessingService,
+  type MediaProcessingService,
+} from "../../../shared/services/media-processing.service";
+import {
+  visionService,
+  type VisionService,
+} from "../../../shared/services/vision.service";
 import { badRequest } from "../../../shared/utils/errors";
 import { paginated, parsePagination } from "../../../shared/utils/pagination";
 import type { CurrentUser } from "../../../shared/plugins/auth.plugin";
@@ -24,15 +32,21 @@ const parseCsvIds = (csv?: string): number[] =>
 export type SearchServiceDeps = {
   repo?: SearchRepository;
   storage?: Pick<StorageService, "publicUrl">;
+  vision?: Pick<VisionService, "analyzeFood">;
+  media?: Pick<MediaProcessingService, "processImage">;
 };
 
 export class SearchService {
   private readonly repo: SearchRepository;
   private readonly storage: NonNullable<SearchServiceDeps["storage"]>;
+  private readonly vision: NonNullable<SearchServiceDeps["vision"]>;
+  private readonly media: NonNullable<SearchServiceDeps["media"]>;
 
   constructor(deps: SearchServiceDeps = {}) {
     this.repo = deps.repo ?? searchRepository;
     this.storage = deps.storage ?? storageService;
+    this.vision = deps.vision ?? visionService;
+    this.media = deps.media ?? mediaProcessingService;
   }
 
   // GET /search/recipes — keyword + advanced filters, AND-combined (AC 4)
@@ -119,6 +133,88 @@ export class SearchService {
       ingredient_match,
       equipment_match,
       match_pct: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length),
+    };
+  }
+
+  /**
+   * POST /search/by-image (decision 2026-07-10) — one-shot: analyze a food
+   * photo with GPT-4o-mini, then search the existing system with what was
+   * found. Keyword hits (dish name, relevance-ranked) come first, then
+   * pantry matches on the detected ingredients that exist in our DB.
+   */
+  async searchByImage(image: File, user: CurrentUser) {
+    // downscale before sending to the vision API — fewer tokens, same answer
+    const compressed = await this.media.processImage(image, "stepImage");
+    const analysis = await this.vision.analyzeFood(compressed);
+
+    // map detected ingredient names (either language) onto our ingredient rows
+    const matched: { ingredientId: number; name: string }[] = [];
+    for (const ing of analysis.ingredients) {
+      const row = await this.repo.findIngredientByAnyName([ing.en, ing.th]);
+      if (row && !matched.some((m) => m.ingredientId === row.ingredientId)) {
+        matched.push(row);
+      }
+    }
+
+    const LIMIT = 20;
+    const publicUrl: Parameters<typeof mapRecipeCard>[2] = (b, p) =>
+      this.storage.publicUrl(b, p);
+
+    // 1) dish-name keyword search (relevance-ranked)
+    const dishQuery = analysis.dish?.th || analysis.dish?.en || undefined;
+    const keywordRows = dishQuery
+      ? await this.repo.searchCards(
+          { q: dishQuery, ingredientIds: [], equipmentIds: [] },
+          { sort: "relevance", limit: LIMIT, offset: 0 },
+          user.userId,
+        )
+      : [];
+
+    // 2) pantry match on the detected ingredients
+    const ingredientIds = matched.map((m) => m.ingredientId);
+    const matchRows = ingredientIds.length
+      ? await this.repo.matchCards(
+          { ingredientIds, equipmentIds: [] },
+          { limit: LIMIT, offset: 0 },
+          user.userId,
+        )
+      : [];
+
+    // merge: keyword hits first, then ingredient matches not already present
+    type ByImageCard = ReturnType<typeof mapRecipeCard> & {
+      matched_by: "dish" | "ingredients";
+      ingredient_match?: { matched: number; total: number; pct: number };
+    };
+    const seen = new Set<number>();
+    const data: ByImageCard[] = [];
+    for (const row of keywordRows) {
+      seen.add(row.recipeId);
+      data.push({ ...mapRecipeCard(row, user.userId, publicUrl), matched_by: "dish" });
+    }
+    for (const row of matchRows) {
+      if (seen.has(row.recipeId) || data.length >= LIMIT) continue;
+      seen.add(row.recipeId);
+      data.push({
+        ...mapRecipeCard(row, user.userId, publicUrl),
+        matched_by: "ingredients",
+        ingredient_match: {
+          matched: row.ingMatched,
+          total: row.ingTotal,
+          pct: row.ingTotal > 0 ? Math.round((100 * row.ingMatched) / row.ingTotal) : 0,
+        },
+      });
+    }
+
+    return {
+      analysis: {
+        dish_name: analysis.dish,
+        ingredients_detected: analysis.ingredients,
+        ingredients_matched: matched.map((m) => ({
+          ingredient_id: m.ingredientId,
+          name: m.name,
+        })),
+      },
+      data,
     };
   }
 

@@ -29,6 +29,7 @@ Open **http://localhost:3000/swagger** for interactive API docs.
 | `JWT_SECRET` | Secret for signing access tokens |
 | `PORT` | Optional, defaults to `3000` |
 | `FFMPEG_PATH` | Optional — overrides the bundled ffmpeg (`ffmpeg-static` ships one with `bun install`; videos are transcoded to 720p H.264 server-side) |
+| `OPENAI_API_KEY` | Optional — enables `POST /search/by-image` (GPT-4o-mini photo analysis); absent → that endpoint returns 503 |
 
 ## Scripts
 

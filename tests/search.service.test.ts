@@ -232,6 +232,91 @@ describe("match (pantry search)", () => {
   });
 });
 
+describe("searchByImage (one-shot photo search)", () => {
+  const png = () => new File(["x"], "food.png", { type: "image/png" });
+
+  const withVision = (analysis: {
+    dish: { th: string; en: string } | null;
+    ingredients: { th: string; en: string }[];
+  }) =>
+    new SearchService({
+      repo: {
+        searchCards: async (filters: SearchFilters, opts: { sort: string }) => {
+          state.capturedFilters.push(filters);
+          state.capturedSorts.push(opts.sort);
+          return state.rows;
+        },
+        countSearch: async () => state.rows.length,
+        matchCards: async (input: MatchInput) => {
+          state.capturedMatch.push(input);
+          return state.matchRows;
+        },
+        countMatch: async () => state.matchRows.length,
+        findIngredientByAnyName: async (candidates: string[]) => {
+          // pretend only "Shrimp" exists in the DB
+          return candidates.some((c) => c === "Shrimp")
+            ? { ingredientId: 5, name: "Shrimp" }
+            : null;
+        },
+      } as unknown as SearchRepository,
+      storage: { publicUrl: (b: string, p: string) => `https://cdn.test/${b}/${p}` } as never,
+      vision: { analyzeFood: async () => analysis },
+      media: { processImage: async (f: File) => f },
+    });
+
+  it("keyword hits come first, then deduped pantry matches with pct", async () => {
+    state.rows = [cardRow({ recipeId: 1 })];
+    state.matchRows = [
+      { ...cardRow({ recipeId: 1 }), ingMatched: 1, ingTotal: 1, eqMatched: 0, eqTotal: 0 }, // dup
+      { ...cardRow({ recipeId: 2 }), ingMatched: 1, ingTotal: 4, eqMatched: 0, eqTotal: 0 },
+    ];
+    const service = withVision({
+      dish: { th: "ต้มยำกุ้ง", en: "Tom Yum Goong" },
+      ingredients: [
+        { th: "กุ้ง", en: "Shrimp" },
+        { th: "ไม่มีในระบบ", en: "Unknown Thing" },
+      ],
+    });
+
+    const res = await service.searchByImage(png(), user);
+    expect(res.analysis.dish_name).toEqual({ th: "ต้มยำกุ้ง", en: "Tom Yum Goong" });
+    expect(res.analysis.ingredients_matched).toEqual([{ ingredient_id: 5, name: "Shrimp" }]);
+    // searched with the Thai dish name, relevance-ranked
+    expect(state.capturedFilters[0]!.q).toBe("ต้มยำกุ้ง");
+    expect(state.capturedSorts[0]).toBe("relevance");
+    // pantry match used only the ingredient that exists in the DB
+    expect(state.capturedMatch[0]!.ingredientIds).toEqual([5]);
+    // merge: recipe 1 once (keyword-first), recipe 2 from ingredients with pct
+    expect(res.data.map((c) => c.recipe_id)).toEqual([1, 2]);
+    expect(res.data[0]!.matched_by).toBe("dish");
+    expect(res.data[1]!).toMatchObject({
+      matched_by: "ingredients",
+      ingredient_match: { matched: 1, total: 4, pct: 25 },
+    });
+  });
+
+  it("no dish recognized -> ingredient path only", async () => {
+    state.matchRows = [
+      { ...cardRow({ recipeId: 7 }), ingMatched: 1, ingTotal: 2, eqMatched: 0, eqTotal: 0 },
+    ];
+    const service = withVision({
+      dish: null,
+      ingredients: [{ th: "กุ้ง", en: "Shrimp" }],
+    });
+    const res = await service.searchByImage(png(), user);
+    expect(state.capturedFilters).toHaveLength(0); // keyword search never ran
+    expect(res.data).toHaveLength(1);
+    expect(res.data[0]!.matched_by).toBe("ingredients");
+  });
+
+  it("nothing usable -> 200 with empty data (frontend shows no-result)", async () => {
+    const service = withVision({ dish: null, ingredients: [] });
+    const res = await service.searchByImage(png(), user);
+    expect(res.data).toEqual([]);
+    expect(res.analysis.ingredients_matched).toEqual([]);
+  });
+});
+
 describe("recent searches", () => {
   it("lists latest first with the 10-item cap and ISO timestamps", async () => {
     state.recent = [{ keyword: "tom yum", searchedAt: new Date("2026-07-10T01:00:00Z") }];

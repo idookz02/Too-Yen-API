@@ -55,6 +55,34 @@ export const MatchQueryDTO = t.Composite([
 ]);
 export type MatchQueryInput = typeof MatchQueryDTO.static;
 
+/** POST /search/by-image — one food photo (decision 2026-07-10). */
+export const ByImageBodyDTO = t.Object({
+  image: t.File({ type: "image" }),
+});
+
+const BilingualName = t.Object({ th: t.String(), en: t.String() });
+
+export const ByImageResponseDTO = t.Object({
+  analysis: t.Object({
+    dish_name: t.Union([BilingualName, t.Null()]),
+    ingredients_detected: t.Array(BilingualName),
+    ingredients_matched: t.Array(
+      t.Object({ ingredient_id: t.Number(), name: t.String() }),
+    ),
+  }),
+  data: t.Array(
+    t.Composite([
+      RecipeCardDTO,
+      t.Object({
+        matched_by: t.Union([t.Literal("dish"), t.Literal("ingredients")]),
+        ingredient_match: t.Optional(
+          t.Object({ matched: t.Number(), total: t.Number(), pct: t.Number() }),
+        ),
+      }),
+    ]),
+  ),
+});
+
 export const RecentKeywordParams = t.Object({ keyword: t.String({ minLength: 1 }) });
 
 export const AutocompleteQueryDTO = t.Object({

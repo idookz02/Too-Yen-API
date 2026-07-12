@@ -41,6 +41,24 @@ Response `200`: recipe cards (03-recipes shape) each extended with:
 
 `ingredient_match` / `equipment_match` is `null` when that list wasn't provided.
 
+## POST /search/by-image — photo search (added 2026-07-10)
+
+One-shot: upload a food photo, get matching recipes. `multipart/form-data` with a single `image` file (compressed server-side before analysis). GPT-4o-mini identifies the dish + ingredients (Thai/English); the results feed the existing search:
+
+- **dish recognized** → keyword search on the dish name, relevance-ranked → cards tagged `matched_by: "dish"`
+- **detected ingredients that exist in our `ingredient` table** → pantry match → cards tagged `matched_by: "ingredients"` with an `ingredient_match { matched, total, pct }`
+- merged (keyword first, deduped), max 20
+
+```json
+{ "analysis": {
+    "dish_name": { "th": "ต้มยำกุ้ง", "en": "Tom Yum Goong" },
+    "ingredients_detected": [ { "th": "กุ้ง", "en": "Shrimp" } ],
+    "ingredients_matched": [ { "ingredient_id": 5, "name": "Shrimp" } ] },
+  "data": [ { "recipe_id": 10, "matched_by": "dish", "...": "card fields" } ] }
+```
+
+Ops notes: requires `OPENAI_API_KEY` (absent → `503 FEATURE_DISABLED`); upstream failure → `502 VISION_API_ERROR`; rate-limited **5/min per IP** (`RATE_LIMIT_IMAGE_SEARCH_MAX`) since every call has a real per-request cost.
+
 ## Recent searches (AC M5-2/3/4)
 
 - **GET /search/recent** → `200 { "keywords": [ { "keyword": "tom yum", "searched_at": "..." } ] }` — latest first

@@ -12,7 +12,7 @@ import { engagementController } from "./modules/engagement/engagement.controller
 import { mastersController } from "./modules/masters/masters.controller";
 import { profileController } from "./modules/profile/profile.controller";
 import { recipesController } from "./modules/recipes/recipes.controller";
-import { searchController } from "./modules/search/search.controller";
+import { imageSearchController, searchController } from "./modules/search/search.controller";
 
 // request logging (Step 9) — silent under bun test (NODE_ENV=test)
 const requestStart = new WeakMap<Request, number>();
@@ -80,6 +80,7 @@ export const app = new Elysia()
       .use(recipesController)
       .use(engagementController)
       .use(searchController)
+      .use(imageSearchController)
       .use(adminMasterController)
       .use(mastersController),
   );
