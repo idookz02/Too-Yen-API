@@ -238,6 +238,7 @@ describe("searchByImage (one-shot photo search)", () => {
   const withVision = (analysis: {
     dish: { th: string; en: string } | null;
     ingredients: { th: string; en: string }[];
+    equipment?: { th: string; en: string }[];
   }) =>
     new SearchService({
       repo: {
@@ -258,9 +259,15 @@ describe("searchByImage (one-shot photo search)", () => {
             ? { ingredientId: 5, name: "Shrimp" }
             : null;
         },
+        findEquipmentByAnyName: async (candidates: string[]) => {
+          // pretend only "Pot" exists in the DB
+          return candidates.some((c) => c === "Pot")
+            ? { equipmentId: 1, name: "Pot" }
+            : null;
+        },
       } as unknown as SearchRepository,
       storage: { publicUrl: (b: string, p: string) => `https://cdn.test/${b}/${p}` } as never,
-      vision: { analyzeFood: async () => analysis },
+      vision: { analyzeFood: async () => ({ equipment: [], ...analysis }) },
       media: { processImage: async (f: File) => f },
     });
 
@@ -307,6 +314,47 @@ describe("searchByImage (one-shot photo search)", () => {
         expect.arrayContaining(["ingredient_match", "equipment_match", "match_pct", "matched_by"]),
       );
     }
+  });
+
+  it("detected equipment feeds the match and yields equipment_match + averaged pct", async () => {
+    state.matchRows = [
+      // 1/4 ingredients (25%) + 1/2 equipment (50%) -> match_pct 38
+      { ...cardRow({ recipeId: 3 }), ingMatched: 1, ingTotal: 4, eqMatched: 1, eqTotal: 2 },
+    ];
+    const service = withVision({
+      dish: null,
+      ingredients: [{ th: "กุ้ง", en: "Shrimp" }],
+      equipment: [
+        { th: "หม้อ", en: "Pot" },
+        { th: "เตาถ่าน", en: "Charcoal Stove" }, // not in DB -> skipped
+      ],
+    });
+    const res = await service.searchByImage(png(), user);
+    expect(res.analysis.equipment_matched).toEqual([{ equipment_id: 1, name: "Pot" }]);
+    expect(state.capturedMatch[0]).toMatchObject({ ingredientIds: [5], equipmentIds: [1] });
+    expect(res.data[0]!).toMatchObject({
+      ingredient_match: { matched: 1, total: 4, pct: 25 },
+      equipment_match: { matched: 1, total: 2, pct: 50 },
+      match_pct: 38, // (25 + 50) / 2 rounded
+    });
+  });
+
+  it("equipment alone (no ingredients matched) still searches", async () => {
+    state.matchRows = [
+      { ...cardRow({ recipeId: 4 }), ingMatched: 0, ingTotal: 3, eqMatched: 1, eqTotal: 1 },
+    ];
+    const service = withVision({
+      dish: null,
+      ingredients: [],
+      equipment: [{ th: "หม้อ", en: "Pot" }],
+    });
+    const res = await service.searchByImage(png(), user);
+    expect(state.capturedMatch[0]).toMatchObject({ ingredientIds: [], equipmentIds: [1] });
+    expect(res.data[0]!).toMatchObject({
+      ingredient_match: null, // ingredient list wasn't provided to the match
+      equipment_match: { matched: 1, total: 1, pct: 100 },
+      match_pct: 100,
+    });
   });
 
   it("no dish recognized -> ingredient path only", async () => {

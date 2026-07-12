@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, lte, sql, type SQL } from "drizzle-orm";
 import { db, type Executor } from "../../../db";
 import {
   ingredient,
+  masterEquipment,
   masterTier,
   recentSearch,
   recipe,
@@ -270,6 +271,30 @@ export class SearchRepository {
         .select({ ingredientId: ingredient.ingredientId, name: ingredient.name })
         .from(ingredient)
         .where(ilike(ingredient.name, `%${name}%`))
+        .limit(1);
+      if (partial[0]) return partial[0];
+    }
+    return null;
+  }
+
+  /** Same resolution strategy for detected equipment — active entries only (ADR-003). */
+  async findEquipmentByAnyName(
+    candidates: string[],
+    executor: Executor = db,
+  ): Promise<{ equipmentId: number; name: string } | null> {
+    for (const name of candidates.map((c) => c.trim()).filter(Boolean)) {
+      const exact = await executor
+        .select({ equipmentId: masterEquipment.equipmentId, name: masterEquipment.name })
+        .from(masterEquipment)
+        .where(
+          and(eq(masterEquipment.isActive, true), sql`lower(${masterEquipment.name}) = lower(${name})`),
+        )
+        .limit(1);
+      if (exact[0]) return exact[0];
+      const partial = await executor
+        .select({ equipmentId: masterEquipment.equipmentId, name: masterEquipment.name })
+        .from(masterEquipment)
+        .where(and(eq(masterEquipment.isActive, true), ilike(masterEquipment.name, `%${name}%`)))
         .limit(1);
       if (partial[0]) return partial[0];
     }

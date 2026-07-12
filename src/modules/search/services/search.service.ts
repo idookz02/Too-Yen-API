@@ -147,12 +147,19 @@ export class SearchService {
     const compressed = await this.media.processImage(image, "stepImage");
     const analysis = await this.vision.analyzeFood(compressed);
 
-    // map detected ingredient names (either language) onto our ingredient rows
+    // map detected ingredient/equipment names (either language) onto our rows
     const matched: { ingredientId: number; name: string }[] = [];
     for (const ing of analysis.ingredients) {
       const row = await this.repo.findIngredientByAnyName([ing.en, ing.th]);
       if (row && !matched.some((m) => m.ingredientId === row.ingredientId)) {
         matched.push(row);
+      }
+    }
+    const matchedEquipment: { equipmentId: number; name: string }[] = [];
+    for (const eq of analysis.equipment) {
+      const row = await this.repo.findEquipmentByAnyName([eq.en, eq.th]);
+      if (row && !matchedEquipment.some((m) => m.equipmentId === row.equipmentId)) {
+        matchedEquipment.push(row);
       }
     }
 
@@ -170,15 +177,17 @@ export class SearchService {
         )
       : [];
 
-    // 2) pantry match on the detected ingredients
+    // 2) pantry match on the detected ingredients + equipment
     const ingredientIds = matched.map((m) => m.ingredientId);
-    const matchRows = ingredientIds.length
-      ? await this.repo.matchCards(
-          { ingredientIds, equipmentIds: [] },
-          { limit: LIMIT, offset: 0 },
-          user.userId,
-        )
-      : [];
+    const equipmentIds = matchedEquipment.map((m) => m.equipmentId);
+    const matchRows =
+      ingredientIds.length || equipmentIds.length
+        ? await this.repo.matchCards(
+            { ingredientIds, equipmentIds },
+            { limit: LIMIT, offset: 0 },
+            user.userId,
+          )
+        : [];
 
     // merge: keyword hits first, then ingredient matches not already present.
     // Cards mirror the /search/match shape exactly (decision 2026-07-10) so
@@ -206,12 +215,25 @@ export class SearchService {
     for (const row of matchRows) {
       if (seen.has(row.recipeId) || data.length >= LIMIT) continue;
       seen.add(row.recipeId);
-      const pct = row.ingTotal > 0 ? Math.round((100 * row.ingMatched) / row.ingTotal) : 0;
+      // same semantics as /search/match: per-dimension stat when that list was
+      // provided, overall = average of the provided dimensions
+      const stat = (m: number, t: number) => ({
+        matched: m,
+        total: t,
+        pct: t > 0 ? Math.round((100 * m) / t) : 0,
+      });
+      const ingredient_match = ingredientIds.length
+        ? stat(row.ingMatched, row.ingTotal)
+        : null;
+      const equipment_match = equipmentIds.length ? stat(row.eqMatched, row.eqTotal) : null;
+      const pcts = [ingredient_match?.pct, equipment_match?.pct].filter(
+        (p): p is number => p !== undefined,
+      );
       data.push({
         ...mapRecipeCard(row, user.userId, publicUrl),
-        ingredient_match: { matched: row.ingMatched, total: row.ingTotal, pct },
-        equipment_match: null,
-        match_pct: pct,
+        ingredient_match,
+        equipment_match,
+        match_pct: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length),
         matched_by: "ingredients",
       });
     }
@@ -222,6 +244,11 @@ export class SearchService {
         ingredients_detected: analysis.ingredients,
         ingredients_matched: matched.map((m) => ({
           ingredient_id: m.ingredientId,
+          name: m.name,
+        })),
+        equipment_detected: analysis.equipment,
+        equipment_matched: matchedEquipment.map((m) => ({
+          equipment_id: m.equipmentId,
           name: m.name,
         })),
       },

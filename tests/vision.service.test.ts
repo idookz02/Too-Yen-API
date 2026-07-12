@@ -54,6 +54,22 @@ describe("VisionService", () => {
     const res = await service.analyzeFood(png());
     expect(res.dish).toBeNull();
     expect(res.ingredients).toHaveLength(12);
+    expect(res.equipment).toEqual([]); // absent in the reply -> empty, not crash
+  });
+
+  it("parses equipment and caps it at 6", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const many = Array.from({ length: 10 }, (_, i) => ({ th: `อุปกรณ์${i}`, en: `Eq${i}` }));
+    const service = new VisionService(async () =>
+      openAiReply({
+        dish: null,
+        ingredients: [],
+        equipment: [{ th: "หม้อ", en: "Pot" }, ...many],
+      }),
+    );
+    const res = await service.analyzeFood(png());
+    expect(res.equipment[0]).toEqual({ th: "หม้อ", en: "Pot" });
+    expect(res.equipment).toHaveLength(6);
   });
 
   it("502 VISION_API_ERROR on an upstream failure", async () => {

@@ -69,6 +69,10 @@ export const ByImageResponseDTO = t.Object({
     ingredients_matched: t.Array(
       t.Object({ ingredient_id: t.Number(), name: t.String() }),
     ),
+    equipment_detected: t.Array(BilingualName),
+    equipment_matched: t.Array(
+      t.Object({ equipment_id: t.Number(), name: t.String() }),
+    ),
   }),
   // cards use the SAME shape as /search/match so the UI can reuse one
   // component (decision 2026-07-10): ingredient_match / equipment_match are
