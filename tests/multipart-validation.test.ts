@@ -30,10 +30,11 @@ const realPng = async (name: string) =>
 
 /**
  * Validation probe: the real schema + real parsing, a stub handler (no DB).
- * Wraps the real `app` — a bare Elysia instance doesn't run the same body-parse
- * pipeline, which is exactly the class of gap these tests exist to close.
+ * Bare instance on purpose — re-mounting the main app trips Elysia's native
+ * static-response reuse on Bun 1.3+ ("ReadableStream is locked"); envelope
+ * behaviour of the real app is covered by the real-route tests below.
  */
-const probe = new Elysia().use(app).post(
+const probe = new Elysia().post(
   "/probe",
   ({ body }) => ({ dataType: typeof body.data, keys: Object.keys(body) }),
   { body: MultipartRecipeBodyDTO },
@@ -73,14 +74,8 @@ describe("MultipartRecipeBodyDTO through Elysia's real parser", () => {
     expect(body.keys.sort()).toEqual(["cover", "data", "publish", "step_image_1"]);
   });
 
-  it("a FAKE image (wrong magic bytes) -> 400 VALIDATION_ERROR, not 500", async () => {
-    const form = new FormData();
-    form.append("cover", new File(["not really a png"], "c.png", { type: "image/png" }));
-    const res = await send(form);
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("VALIDATION_ERROR");
-  });
+  // fake-image → 400 is asserted against the REAL route below (needs the
+  // app's INVALID_FILE_TYPE mapper, which the bare probe doesn't have)
 
   it("accepts an empty multipart body (empty draft, AC M1-5)", async () => {
     const form = new FormData();
@@ -93,27 +88,27 @@ describe("MultipartRecipeBodyDTO through Elysia's real parser", () => {
     const form = new FormData();
     form.append("data", JSON.stringify({ steps: "not-an-array" }));
     const res = await send(form);
-    expect(res.status).toBe(400); // the app's global mapper turns VALIDATION into 400
-    const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.status).toBe(422); // raw Elysia validation — the bare probe has no mapper
   });
 });
 
-describe("real app route (regression pin for the smoke failure)", () => {
-  it("POST /api/v1/recipes with FormData gets PAST validation", async () => {
-    // sign a token the same way the guard tests do
+describe("real app route (regression pins for the smoke failures)", () => {
+  const signToken = async () => {
     let token = "";
     const signer = new Elysia()
       .use(jwtPlugin)
       .get("/sign", async ({ jwt }) => (token = await jwt.sign({ sub: "1", role: "user" })));
     await signer.handle(new Request("http://localhost/sign"));
+    return token;
+  };
 
+  it("POST /api/v1/recipes with FormData gets PAST validation", async () => {
     const form = new FormData();
     form.append("data", JSON.stringify({ recipe_name: "Regression Pin" }));
     const res = await app.handle(
       new Request("http://localhost/api/v1/recipes", {
         method: "POST",
-        headers: { authorization: `Bearer ${token}` },
+        headers: { authorization: `Bearer ${await signToken()}` },
         body: form,
       }),
     );
@@ -122,5 +117,20 @@ describe("real app route (regression pin for the smoke failure)", () => {
     // the point is it must NOT die earlier as VALIDATION_ERROR (the smoke bug)
     expect(body.error?.code).not.toBe("VALIDATION_ERROR");
     expect(res.status).not.toBe(400);
+  });
+
+  it("a FAKE image (wrong magic bytes) -> 400 VALIDATION_ERROR, not 500", async () => {
+    const form = new FormData();
+    form.append("cover", new File(["not really a png"], "c.png", { type: "image/png" }));
+    const res = await app.handle(
+      new Request("http://localhost/api/v1/recipes", {
+        method: "POST",
+        headers: { authorization: `Bearer ${await signToken()}` },
+        body: form,
+      }),
+    );
+    expect(res.status).toBe(400); // schema-level sniff fails BEFORE any DB access
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 });

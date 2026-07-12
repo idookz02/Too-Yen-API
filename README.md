@@ -6,7 +6,7 @@ Recipe-sharing REST API — publish recipes, browse a feed, engage (like / favor
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) ≥ 1.1
+- [Bun](https://bun.sh) **≥ 1.3** — 1.1.x segfaults (exit 116) under this app's DB query load; verified on 1.3.14
 - A PostgreSQL database (Supabase project) — connection string for `DATABASE_URL`
 
 ## Getting started

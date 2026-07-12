@@ -1,11 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
-import { app } from "../src/index";
+import { AppError } from "../src/shared/utils/errors";
 import { rateLimit } from "../src/shared/plugins/rate-limit.plugin";
 
+// NOTE: do not `.use(app)` here — re-mounting the main app once per test trips
+// Elysia's native static-response reuse on Bun 1.3+ ("ReadableStream is
+// locked"). A minimal local mapper reproduces the 429 envelope instead.
 const makeApp = () =>
   new Elysia()
-    .use(app) // reuse the global error mapper for the 429 envelope
+    .onError(({ error, set }) => {
+      if (error instanceof AppError) {
+        set.status = error.statusCode;
+        return { error: { code: error.code ?? "ERROR", message: error.message } };
+      }
+    })
     .use(rateLimit({ name: "test", windowMs: 60_000, max: 2 }))
     .get("/limited", () => ({ ok: true }));
 
