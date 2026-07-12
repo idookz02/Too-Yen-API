@@ -46,15 +46,22 @@ Response `200`: recipe cards (03-recipes shape) each extended with:
 One-shot: upload a food photo, get matching recipes. `multipart/form-data` with a single `image` file (compressed server-side before analysis). GPT-4o-mini identifies the dish + ingredients (Thai/English); the results feed the existing search:
 
 - **dish recognized** → keyword search on the dish name, relevance-ranked → cards tagged `matched_by: "dish"`
-- **detected ingredients that exist in our `ingredient` table** → pantry match → cards tagged `matched_by: "ingredients"` with an `ingredient_match { matched, total, pct }`
+- **detected ingredients that exist in our `ingredient` table** → pantry match → cards tagged `matched_by: "ingredients"`
 - merged (keyword first, deduped), max 20
+
+**Cards use the exact `/search/match` shape** (aligned 2026-07-10 so the UI reuses one component): every card carries `ingredient_match` and `equipment_match` (nullable) plus an overall `match_pct` — a dish-name hit has `ingredient_match: null` and `match_pct: 100`; an ingredient hit has `match_pct` equal to its ingredient pct. `equipment_match` is always `null` here (photos don't filter by equipment). `matched_by` is an additive extra.
 
 ```json
 { "analysis": {
     "dish_name": { "th": "ต้มยำกุ้ง", "en": "Tom Yum Goong" },
     "ingredients_detected": [ { "th": "กุ้ง", "en": "Shrimp" } ],
     "ingredients_matched": [ { "ingredient_id": 5, "name": "Shrimp" } ] },
-  "data": [ { "recipe_id": 10, "matched_by": "dish", "...": "card fields" } ] }
+  "data": [
+    { "recipe_id": 10, "matched_by": "dish",
+      "ingredient_match": null, "equipment_match": null, "match_pct": 100 },
+    { "recipe_id": 12, "matched_by": "ingredients",
+      "ingredient_match": { "matched": 1, "total": 4, "pct": 25 },
+      "equipment_match": null, "match_pct": 25 } ] }
 ```
 
 Ops notes: requires `OPENAI_API_KEY` (absent → `503 FEATURE_DISABLED`); upstream failure → `502 VISION_API_ERROR`; rate-limited **5/min per IP** (`RATE_LIMIT_IMAGE_SEARCH_MAX`) since every call has a real per-request cost.

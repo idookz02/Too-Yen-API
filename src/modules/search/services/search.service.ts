@@ -180,28 +180,39 @@ export class SearchService {
         )
       : [];
 
-    // merge: keyword hits first, then ingredient matches not already present
+    // merge: keyword hits first, then ingredient matches not already present.
+    // Cards mirror the /search/match shape exactly (decision 2026-07-10) so
+    // the UI reuses one component: nullable ingredient_match/equipment_match
+    // on every card + an overall match_pct (dish-name hit = 100).
+    type MatchStat = { matched: number; total: number; pct: number };
     type ByImageCard = ReturnType<typeof mapRecipeCard> & {
+      ingredient_match: MatchStat | null;
+      equipment_match: MatchStat | null;
+      match_pct: number;
       matched_by: "dish" | "ingredients";
-      ingredient_match?: { matched: number; total: number; pct: number };
     };
     const seen = new Set<number>();
     const data: ByImageCard[] = [];
     for (const row of keywordRows) {
       seen.add(row.recipeId);
-      data.push({ ...mapRecipeCard(row, user.userId, publicUrl), matched_by: "dish" });
+      data.push({
+        ...mapRecipeCard(row, user.userId, publicUrl),
+        ingredient_match: null,
+        equipment_match: null, // image search never filters by equipment
+        match_pct: 100, // the recognized dish name matched this recipe directly
+        matched_by: "dish",
+      });
     }
     for (const row of matchRows) {
       if (seen.has(row.recipeId) || data.length >= LIMIT) continue;
       seen.add(row.recipeId);
+      const pct = row.ingTotal > 0 ? Math.round((100 * row.ingMatched) / row.ingTotal) : 0;
       data.push({
         ...mapRecipeCard(row, user.userId, publicUrl),
+        ingredient_match: { matched: row.ingMatched, total: row.ingTotal, pct },
+        equipment_match: null,
+        match_pct: pct,
         matched_by: "ingredients",
-        ingredient_match: {
-          matched: row.ingMatched,
-          total: row.ingTotal,
-          pct: row.ingTotal > 0 ? Math.round((100 * row.ingMatched) / row.ingTotal) : 0,
-        },
       });
     }
 

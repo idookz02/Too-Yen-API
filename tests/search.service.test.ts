@@ -288,11 +288,25 @@ describe("searchByImage (one-shot photo search)", () => {
     expect(state.capturedMatch[0]!.ingredientIds).toEqual([5]);
     // merge: recipe 1 once (keyword-first), recipe 2 from ingredients with pct
     expect(res.data.map((c) => c.recipe_id)).toEqual([1, 2]);
-    expect(res.data[0]!.matched_by).toBe("dish");
+    // cards mirror the /search/match shape exactly (UI reuses one component)
+    expect(res.data[0]!).toMatchObject({
+      matched_by: "dish",
+      ingredient_match: null,
+      equipment_match: null,
+      match_pct: 100,
+    });
     expect(res.data[1]!).toMatchObject({
       matched_by: "ingredients",
       ingredient_match: { matched: 1, total: 4, pct: 25 },
+      equipment_match: null,
+      match_pct: 25,
     });
+    // every card carries every /search/match field — nothing optional/omitted
+    for (const card of res.data) {
+      expect(Object.keys(card)).toEqual(
+        expect.arrayContaining(["ingredient_match", "equipment_match", "match_pct", "matched_by"]),
+      );
+    }
   });
 
   it("no dish recognized -> ingredient path only", async () => {

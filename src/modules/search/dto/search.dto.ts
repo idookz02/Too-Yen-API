@@ -70,14 +70,25 @@ export const ByImageResponseDTO = t.Object({
       t.Object({ ingredient_id: t.Number(), name: t.String() }),
     ),
   }),
+  // cards use the SAME shape as /search/match so the UI can reuse one
+  // component (decision 2026-07-10): ingredient_match / equipment_match are
+  // always present (null when not applicable) and every card has match_pct —
+  // 100 for dish-name hits, the ingredient pct otherwise. matched_by is an
+  // additive extra telling the UI why the card is here.
   data: t.Array(
     t.Composite([
       RecipeCardDTO,
       t.Object({
-        matched_by: t.Union([t.Literal("dish"), t.Literal("ingredients")]),
-        ingredient_match: t.Optional(
+        ingredient_match: t.Union([
           t.Object({ matched: t.Number(), total: t.Number(), pct: t.Number() }),
-        ),
+          t.Null(),
+        ]),
+        equipment_match: t.Union([
+          t.Object({ matched: t.Number(), total: t.Number(), pct: t.Number() }),
+          t.Null(),
+        ]),
+        match_pct: t.Number(),
+        matched_by: t.Union([t.Literal("dish"), t.Literal("ingredients")]),
       }),
     ]),
   ),

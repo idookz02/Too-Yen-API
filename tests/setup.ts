@@ -13,3 +13,5 @@ process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/too_yen_test";
 process.env.SUPABASE_URL = "https://test.invalid";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key-not-real";
 process.env.JWT_SECRET = "test-secret-not-for-production";
+// a real key here would make vision tests call OpenAI for real (it did — 429)
+delete process.env.OPENAI_API_KEY;
