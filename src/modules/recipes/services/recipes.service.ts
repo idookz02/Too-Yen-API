@@ -167,13 +167,18 @@ export class RecipesService {
     stepImages: Map<number, File>;
     publish: boolean;
   } {
+    // Elysia may hand us either the auto-parsed object (JSON-looking form
+    // value) or the raw string — normalize both paths through the same check
     let input: UpsertRecipeInput = {};
-    if (typeof body.data === "string" && body.data.trim() !== "") {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(body.data);
-      } catch {
-        throw badRequest("data must be a valid JSON string", "VALIDATION_ERROR");
+    const raw = body.data;
+    if (raw !== undefined && raw !== null && raw !== "") {
+      let parsed: unknown = raw;
+      if (typeof raw === "string") {
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          throw badRequest("data must be a valid JSON string", "VALIDATION_ERROR");
+        }
       }
       if (!Value.Check(UpsertRecipeDTO, parsed)) {
         const first = Value.Errors(UpsertRecipeDTO, parsed).First();

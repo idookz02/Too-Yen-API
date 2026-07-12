@@ -87,7 +87,7 @@ let adminToken = "";
   const form = new FormData();
   for (const [k, v] of Object.entries(SMOKE_USER)) form.append(k, v);
   const signup = await api("/auth/signup", { method: "POST", form });
-  ok("signup -> 201 + token + Bronze tier", signup.status === 201 && !!signup.data.access_token && signup.data.user.tier?.name === "Bronze", signup.data);
+  ok("signup -> 201 + token + Rookie tier", signup.status === 201 && !!signup.data.access_token && signup.data.user.tier?.name === "Rookie", signup.data);
   token = signup.data.access_token;
 
   const dupForm = new FormData();
@@ -331,8 +331,28 @@ section("cleanup");
   ok("detail after delete -> 404", gone.status === 404);
 }
 
+section("self-cleanup (direct DB — users have no delete endpoint)");
+{
+  const { db } = await import("../src/db");
+  const { users } = await import("../src/db/schema");
+  const { storageService, BUCKETS } = await import("../src/shared/services/storage.service");
+  const { eq } = await import("drizzle-orm");
+
+  const [me] = await db
+    .select({ userId: users.userId, avatarPath: users.profilePicturePath })
+    .from(users)
+    .where(eq(users.username, SMOKE_USER.username))
+    .limit(1);
+  if (me) {
+    if (me.avatarPath) await storageService.remove(BUCKETS.avatars, [me.avatarPath]);
+    await db.delete(users).where(eq(users.userId, me.userId));
+    ok(`smoke user ${SMOKE_USER.username} removed (row + avatar file)`, true);
+  } else {
+    ok("smoke user already gone", true);
+  }
+}
+
 console.log(`\n${"=".repeat(40)}\nSmoke result: ${pass} passed, ${fail} failed`);
-if (fail === 0) console.log(`(note: smoke user ${SMOKE_USER.username} remains — users have no delete endpoint)`);
 process.exit(fail === 0 ? 0 : 1);
 
 export {}; // top-level await requires module context under tsc

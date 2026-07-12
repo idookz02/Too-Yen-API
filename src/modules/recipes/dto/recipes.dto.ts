@@ -54,15 +54,26 @@ export type UpsertRecipeInput = typeof UpsertRecipeDTO.static;
  * `publish=true` (create only) to validate + publish in the same request.
  * step_image_{n} keys are dynamic — validated in the service.
  */
-export const MultipartRecipeBodyDTO = t.Object({
-  data: t.Optional(
-    t.String({ description: "JSON string with the recipe fields (old JSON body)" }),
-  ),
-  cover: t.Optional(t.File({ type: "image" })),
-  publish: t.Optional(
-    t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")]),
-  ),
-});
+export const MultipartRecipeBodyDTO = t.Object(
+  {
+    // Elysia auto-parses JSON-looking form values into objects BEFORE validation
+    // (found by the live smoke run 2026-07-10) — accept both: the parsed object,
+    // or a raw string (e.g. malformed JSON, which the service rejects with a 400)
+    data: t.Optional(
+      t.Union([
+        UpsertRecipeDTO,
+        t.String({ description: "JSON string with the recipe fields (old JSON body)" }),
+      ]),
+    ),
+    cover: t.Optional(t.File({ type: "image" })),
+    publish: t.Optional(
+      t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")]),
+    ),
+  },
+  // additionalProperties keeps the dynamic step_image_{n} File fields — without
+  // it Elysia strips unknown multipart keys and step images silently vanish
+  { additionalProperties: true },
+);
 
 export const VisibilityDTO = t.Object({
   status: t.Union([t.Literal("published"), t.Literal("private")]),

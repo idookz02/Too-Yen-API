@@ -47,13 +47,22 @@ export const app = new Elysia()
     }
     if (code === "VALIDATION") {
       set.status = 400;
+      if (process.env.DEBUG_VALIDATION) console.error("[VALIDATION]", String(error));
       return { error: { code: "VALIDATION_ERROR", message: "Validation failed" } };
     }
     if (code === "NOT_FOUND") {
       set.status = 404;
       return { error: { code: "NOT_FOUND", message: "Not found" } };
     }
-    console.error(`[${code}]`, error);
+    // Elysia's t.File type sniffing (magic bytes) throws INVALID_FILE_TYPE —
+    // a client sending a fake "image" is a 400, not a server error
+    if ((error as { code?: string }).code === "INVALID_FILE_TYPE") {
+      set.status = 400;
+      return {
+        error: { code: "VALIDATION_ERROR", message: (error as Error).message },
+      };
+    }
+    if (process.env.NODE_ENV !== "test") console.error(`[${code}]`, error);
     set.status = 500;
     return {
       error: { code: "INTERNAL_ERROR", message: "Internal server error" },

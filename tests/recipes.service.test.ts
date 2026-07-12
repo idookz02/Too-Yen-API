@@ -662,6 +662,24 @@ describe("createFromMultipart", () => {
     expect(state.recipes.size).toBe(0);
   });
 
+  it("accepts data as an already-parsed OBJECT (Elysia auto-parses JSON form values)", async () => {
+    const res = await service.createFromMultipart(
+      { data: JSON.parse(completeData()), cover: png() }, // object, not string
+      owner,
+    );
+    expect(res.recipe_name).toBe("One Shot Curry");
+    expect(res.media.filter((m) => m.is_cover)).toHaveLength(1);
+  });
+
+  it("rejects an object data with an invalid shape", async () => {
+    await expectAppError(
+      () => service.createFromMultipart({ data: { steps: "boom" } }, owner),
+      400,
+      "VALIDATION_ERROR",
+    );
+    expect(state.recipes.size).toBe(0);
+  });
+
   it("rejects malformed data JSON and non-image step files", async () => {
     await expectAppError(
       () => service.createFromMultipart({ data: "{not json" }, owner),

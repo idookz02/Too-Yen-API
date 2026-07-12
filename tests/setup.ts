@@ -6,8 +6,10 @@
  * real .env — postgres.js connects lazily, so no socket opens unless a test
  * actually runs a query. Real values (if present in the env) win via `??=`.
  */
-process.env.DATABASE_URL ??=
-  "postgresql://user:pass@localhost:5432/too_yen_test";
-
-// jwt plugins read JWT_SECRET at import time (auth controller pulls them in)
-process.env.JWT_SECRET ??= "test-secret-not-for-production";
+// FORCE overrides (not ??=): once a real .env exists Bun auto-loads it into
+// bun test, and a conditional default would silently point the entire test
+// suite at the LIVE database (it did — leaked draft rows on 2026-07-10).
+process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/too_yen_test";
+process.env.SUPABASE_URL = "https://test.invalid";
+process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key-not-real";
+process.env.JWT_SECRET = "test-secret-not-for-production";
