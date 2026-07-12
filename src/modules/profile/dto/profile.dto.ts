@@ -34,7 +34,7 @@ export const MeResponseDTO = t.Object({
   display_name: t.String(),
   email: t.String({ format: "email" }),
   profile_picture_url: t.Union([t.String(), t.Null()]),
-  role: t.String(),
+  role: t.Union([t.Literal("user"), t.Literal("admin")]),
   tier: t.Union([
     t.Object({ tier_id: t.Number(), name: t.String(), min_likes: t.Number() }),
     t.Null(),

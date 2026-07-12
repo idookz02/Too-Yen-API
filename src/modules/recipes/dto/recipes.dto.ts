@@ -8,6 +8,22 @@ import { PaginationQueryDTO } from "../../../shared/utils/pagination";
 export const RECIPE_SORTS = ["newest", "most_liked", "most_favorited"] as const;
 export type RecipeSort = (typeof RECIPE_SORTS)[number];
 
+/** ADR-005 — recipe.status check constraint. Stored as plain `text` in the DB
+ *  (see doc/supabase/001_schema.sql), so repositories read it back as
+ *  `string` — callers assert this literal type at the DB boundary. */
+export const RECIPE_STATUSES = ["draft", "published", "private"] as const;
+export type RecipeStatus = (typeof RECIPE_STATUSES)[number];
+const RecipeStatusDTO = t.Union([
+  t.Literal("draft"),
+  t.Literal("published"),
+  t.Literal("private"),
+]);
+
+/** recipe_media.media_type check constraint — same DB-boundary note as above. */
+export const MEDIA_TYPES = ["image", "video"] as const;
+export type MediaType = (typeof MEDIA_TYPES)[number];
+const MediaTypeDTO = t.Union([t.Literal("image"), t.Literal("video")]);
+
 export const FeedQueryDTO = t.Composite([
   PaginationQueryDTO,
   t.Object({
@@ -83,7 +99,7 @@ export type VisibilityInput = typeof VisibilityDTO.static;
 /** POST /recipes/{id}/media — multipart. is_cover arrives as a string field. */
 export const AddMediaDTO = t.Object({
   file: t.File(),
-  type: t.Union([t.Literal("image"), t.Literal("video")]),
+  type: MediaTypeDTO,
   is_cover: t.Optional(
     t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")]),
   ),
@@ -127,7 +143,7 @@ export const RecipeCardDTO = t.Object({
   liked_by_me: t.Boolean(),
   favorited_by_me: t.Boolean(),
   is_owner: t.Boolean(),
-  status: t.String(),
+  status: RecipeStatusDTO,
   published_at: NullableString,
 });
 
@@ -159,7 +175,7 @@ export const RecipeDetailDTO = t.Composite([
     media: t.Array(
       t.Object({
         media_id: t.Number(),
-        type: t.String(),
+        type: MediaTypeDTO,
         url: t.String(),
         is_cover: t.Boolean(),
         sort_order: t.Number(),
@@ -180,7 +196,7 @@ export const FeedResponseDTO = t.Object({
 
 export const MediaResponseDTO = t.Object({
   media_id: t.Number(),
-  type: t.String(),
+  type: MediaTypeDTO,
   url: t.String(),
   is_cover: t.Boolean(),
   sort_order: t.Number(),

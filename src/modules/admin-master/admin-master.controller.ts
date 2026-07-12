@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { authPlugin, requireAdmin } from "../../shared/plugins/auth.plugin";
 import { adminMasterService } from "./services/admin-master.service";
 import {
@@ -89,6 +89,7 @@ export const adminMasterController = new Elysia({ prefix: "/admin/master" })
     },
     {
       params: MasterEntryParams,
+      response: { 204: t.Void() },
       detail: {
         tags: ["Admin"],
         summary: "Delete entry (soft)",

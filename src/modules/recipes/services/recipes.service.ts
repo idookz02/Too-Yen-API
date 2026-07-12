@@ -22,6 +22,7 @@ import { Value } from "@sinclair/typebox/value";
 import {
   UpsertRecipeDTO,
   type AddMediaInput,
+  type MediaType,
   type RecipeSort,
   type UpsertRecipeInput,
   type VisibilityInput,
@@ -387,7 +388,7 @@ export class RecipesService {
     });
     return {
       media_id: created.mediaId,
-      type: created.mediaType,
+      type: created.mediaType as MediaType,
       url: this.storage.publicUrl(BUCKETS.recipeMedia, created.objectPath),
       is_cover: created.isCover,
       sort_order: created.sortOrder,
@@ -490,7 +491,8 @@ export class RecipesService {
       })),
       media: parts.media.map((mm) => ({
         media_id: mm.mediaId,
-        type: mm.mediaType,
+        // DB column is plain `text` (check constraint, not a real enum) — see MediaType.
+        type: mm.mediaType as MediaType,
         url: this.storage.publicUrl(BUCKETS.recipeMedia, mm.objectPath),
         is_cover: mm.isCover,
         sort_order: mm.sortOrder,

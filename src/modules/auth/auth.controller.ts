@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { jwtPlugin, resetJwtPlugin } from "../../shared/plugins/auth.plugin";
 import { rateLimit } from "../../shared/plugins/rate-limit.plugin";
 import { authService } from "./services/auth.service";
@@ -78,6 +78,7 @@ export const authController = new Elysia({ prefix: "/auth" })
     },
     {
       body: ResetPasswordDTO,
+      response: { 204: t.Void() },
       detail: {
         tags: ["Auth"],
         summary: "Forgot password — set a new password",

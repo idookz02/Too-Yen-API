@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { authPlugin } from "../../shared/plugins/auth.plugin";
 import { PaginationQueryDTO } from "../../shared/utils/pagination";
 import { engagementService } from "./services/engagement.service";
@@ -125,6 +125,7 @@ export const engagementController = new Elysia()
     },
     {
       params: CommentIdParams,
+      response: { 204: t.Void() },
       detail: {
         tags: ["Engagement"],
         summary: "Delete comment (soft)",

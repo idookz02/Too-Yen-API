@@ -143,7 +143,8 @@ export class ProfileService {
       profile_picture_url: row.user.profilePicturePath
         ? this.storage.publicUrl(BUCKETS.avatars, row.user.profilePicturePath)
         : null,
-      role: row.user.role,
+      // DB column is plain `text` ('user'|'admin', CLAUDE.md) — asserted at this boundary.
+      role: row.user.role as "user" | "admin",
       tier: row.tier
         ? { tier_id: row.tier.tierId, name: row.tier.name, min_likes: row.tier.minLikes }
         : null,

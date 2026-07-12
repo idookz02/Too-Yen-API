@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { authPlugin } from "../../shared/plugins/auth.plugin";
 import { badRequest } from "../../shared/utils/errors";
 import { recipesService } from "./services/recipes.service";
@@ -154,6 +154,7 @@ export const recipesController = new Elysia({ prefix: "/recipes" })
     },
     {
       params: RecipeIdParams,
+      response: { 204: t.Void() },
       detail: {
         tags: ["Recipes"],
         summary: "Delete recipe",
@@ -191,6 +192,7 @@ export const recipesController = new Elysia({ prefix: "/recipes" })
     },
     {
       params: MediaIdParams,
+      response: { 204: t.Void() },
       detail: {
         tags: ["Recipes"],
         summary: "Delete media",

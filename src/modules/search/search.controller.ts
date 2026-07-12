@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { authPlugin } from "../../shared/plugins/auth.plugin";
 import { rateLimit } from "../../shared/plugins/rate-limit.plugin";
 import { searchService } from "./services/search.service";
@@ -105,6 +105,7 @@ export const searchController = new Elysia()
     },
     {
       params: RecentKeywordParams,
+      response: { 204: t.Void() },
       detail: {
         tags: ["Search"],
         summary: "Remove a recent keyword",
