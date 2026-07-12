@@ -46,7 +46,7 @@ Constraints: UNIQUE(name) ต่อตาราง | Admin "Delete" = `is_active
 | Column | Type | Null | Key | Description (TH / EN) |
 |--------|------|------|-----|------------------------|
 | tier_id | BIGINT | NO | PK | รหัส tier / Tier ID |
-| name | VARCHAR(100) | NO | UK | ชื่อระดับ เช่น Bronze, Silver, Gold / Tier name |
+| name | VARCHAR(100) | NO | UK | ชื่อระดับ เช่น Rookie, Commis Chef, Sous Chef, Master Chef / Tier name |
 | min_likes | INT | NO | UK | ยอดไลก์รวมขั้นต่ำ — user อยู่ tier สูงสุดที่ผ่านเกณฑ์ / Min total likes threshold |
 | is_active | BOOLEAN | NO | | soft delete เหมือน master อื่น / Soft delete (ADR-003) |
 | created_at | DATETIME | NO | | วันที่สร้าง / Created time |

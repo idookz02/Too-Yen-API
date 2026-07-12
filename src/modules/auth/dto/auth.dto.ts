@@ -49,7 +49,7 @@ export const AuthUserDTO = t.Object({
   profile_picture_url: t.Union([t.String(), t.Null()]),
   role: t.String({ examples: ["user"] }),
   tier: t.Union([
-    t.Object({ tier_id: t.Number(), name: t.String({ examples: ["Bronze"] }) }),
+    t.Object({ tier_id: t.Number(), name: t.String({ examples: ["Rookie"] }) }),
     t.Null(),
   ]),
 });

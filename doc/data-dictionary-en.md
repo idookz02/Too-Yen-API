@@ -46,7 +46,7 @@ Constraints: UNIQUE(name) per table | Admin "Delete" sets `is_active = FALSE`; r
 | Column | Type | Null | Key | Description |
 |--------|------|------|-----|-------------|
 | tier_id | BIGINT | NO | PK | Tier ID |
-| name | VARCHAR(100) | NO | UK | Tier name, e.g. Bronze, Silver, Gold |
+| name | VARCHAR(100) | NO | UK | Tier name, e.g. Rookie, Commis Chef, Sous Chef, Master Chef |
 | min_likes | INT | NO | UK | Minimum total likes threshold — a user holds the highest tier whose threshold they meet |
 | is_active | BOOLEAN | NO | | Soft delete, same convention as other masters (ADR-003) |
 | created_at | DATETIME | NO | | Created time |

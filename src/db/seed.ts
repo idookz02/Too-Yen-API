@@ -35,13 +35,17 @@ const log = (msg: string) => console.log(`[seed] ${msg}`);
 // ===== reference data =====
 
 async function seedTiers() {
-  log("seeding master_tier (Bronze 0 / Silver 100 / Gold 500)...");
+  // min_likes is a floor, not a range — user sits in the highest tier where
+  // min_likes <= total likes (ADR-012), so the upper bounds below (50/100/250/500)
+  // are implied by the next tier's threshold, not stored anywhere.
+  log("seeding master_tier (Rookie 0 / Commis Chef 51 / Sous Chef 101 / Master Chef 251)...");
   await db
     .insert(masterTier)
     .values([
-      { name: "Bronze", minLikes: 0 },
-      { name: "Silver", minLikes: 100 },
-      { name: "Gold", minLikes: 500 },
+      { name: "Rookie", minLikes: 0 }, // 0-50 likes
+      { name: "Commis Chef", minLikes: 51 }, // 51-100 likes
+      { name: "Sous Chef", minLikes: 101 }, // 101-250 likes
+      { name: "Master Chef", minLikes: 251 }, // 251-500+ likes
     ])
     .onConflictDoNothing();
 }
