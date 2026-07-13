@@ -105,6 +105,7 @@ export class AdminMasterService {
       name: row.name,
       is_active: row.isActive,
       in_use_count: row.inUseCount,
+      used: row.inUseCount > 0,
       created_at: row.createdAt.toISOString(),
       ...(type === "tiers" && row.minLikes != null ? { min_likes: row.minLikes } : {}),
     };

@@ -290,16 +290,25 @@ export class RecipesRepository {
       .where(eq(recipe.recipeId, recipeId));
   }
 
-  /** find-or-create by lower(name) — ADR-001. Race-safe via ON CONFLICT DO NOTHING + re-read. */
+  /** find-or-create by lower(name) — ADR-001. Race-safe via ON CONFLICT DO NOTHING + re-read.
+   *  A soft-deleted ingredient is reactivated on reuse (admin master path, ADR-003). */
   private async findOrCreateIngredient(name: string, executor: Executor): Promise<number> {
     const byName = () =>
       executor
-        .select({ id: ingredient.ingredientId })
+        .select({ id: ingredient.ingredientId, isActive: ingredient.isActive })
         .from(ingredient)
         .where(sql`lower(${ingredient.name}) = lower(${name})`)
         .limit(1);
     const [existing] = await byName();
-    if (existing) return existing.id;
+    if (existing) {
+      if (!existing.isActive) {
+        await executor
+          .update(ingredient)
+          .set({ isActive: true })
+          .where(eq(ingredient.ingredientId, existing.id));
+      }
+      return existing.id;
+    }
     const [inserted] = await executor
       .insert(ingredient)
       .values({ name })
@@ -311,16 +320,22 @@ export class RecipesRepository {
     return again.id;
   }
 
-  /** find-or-create by lower(name) — ADR-007. */
+  /** find-or-create by lower(name) — ADR-007. A soft-deleted unit is
+   *  reactivated on reuse, mirroring the admin master path (ADR-003). */
   private async findOrCreateUnit(name: string, executor: Executor): Promise<number> {
     const byName = () =>
       executor
-        .select({ id: unit.unitId })
+        .select({ id: unit.unitId, isActive: unit.isActive })
         .from(unit)
         .where(sql`lower(${unit.name}) = lower(${name})`)
         .limit(1);
     const [existing] = await byName();
-    if (existing) return existing.id;
+    if (existing) {
+      if (!existing.isActive) {
+        await executor.update(unit).set({ isActive: true }).where(eq(unit.unitId, existing.id));
+      }
+      return existing.id;
+    }
     const [inserted] = await executor
       .insert(unit)
       .values({ name })

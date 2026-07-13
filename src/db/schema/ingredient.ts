@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
-import { bigint, pgTable, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, pgTable, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 // ===== Ingredient / Unit (ADR-001, ADR-007) =====
+// Ingredient is a master (admin CRUD + soft delete via is_active, ADR-003),
+// still find-or-created from free-text ingredient name on recipe save (ADR-001).
 
 export const ingredient = pgTable(
   "ingredient",
@@ -10,6 +12,7 @@ export const ingredient = pgTable(
       .primaryKey()
       .generatedAlwaysAsIdentity(),
     name: varchar("name", { length: 150 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

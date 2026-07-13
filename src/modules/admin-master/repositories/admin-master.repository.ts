@@ -5,8 +5,10 @@ import {
   masterCategory,
   masterCookingMethod,
   masterEquipment,
+  ingredient,
   masterSkillLevel,
   masterTier,
+  unit,
 } from "../../../db/schema";
 import type { MasterTypeParam } from "../../masters/dto/masters.dto";
 
@@ -31,6 +33,8 @@ type TypeConfig = {
     | typeof masterCookingMethod
     | typeof masterCategory
     | typeof masterEquipment
+    | typeof ingredient
+    | typeof unit
     | typeof masterTier;
   id: AnyPgColumn;
   minLikes: AnyPgColumn | null;
@@ -70,6 +74,22 @@ const CONFIG: Record<MasterTypeParam, TypeConfig> = {
     minLikes: null,
     inUseCount: count(
       sql`select count(*) from recipe_equipment re where re.equipment_id = ${masterEquipment.equipmentId}`,
+    ),
+  },
+  ingredients: {
+    table: ingredient,
+    id: ingredient.ingredientId,
+    minLikes: null,
+    inUseCount: count(
+      sql`select count(*) from recipe_ingredient ri where ri.ingredient_id = ${ingredient.ingredientId}`,
+    ),
+  },
+  units: {
+    table: unit,
+    id: unit.unitId,
+    minLikes: null,
+    inUseCount: count(
+      sql`select count(*) from recipe_ingredient ri where ri.unit_id = ${unit.unitId}`,
     ),
   },
   tiers: {

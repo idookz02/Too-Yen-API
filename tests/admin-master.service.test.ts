@@ -201,9 +201,21 @@ describe("softDelete", () => {
 });
 
 describe("types", () => {
-  it("returns the 5 tab types", () => {
+  it("returns the tab types (units is a master too)", () => {
     expect(service.types()).toEqual({
-      types: ["skill-levels", "cooking-methods", "categories", "equipment", "tiers"],
+      types: ["skill-levels", "cooking-methods", "categories", "equipment", "ingredients", "units", "tiers"],
     });
+  });
+});
+
+describe("used flag", () => {
+  it("is false when in_use_count is 0, true otherwise", async () => {
+    state.rows.set("units", [
+      row({ id: 1, name: "gram", inUseCount: 0 }),
+      row({ id: 2, name: "ml", inUseCount: 4 }),
+    ]);
+    const { data } = await service.list("units", undefined);
+    expect(data.find((d) => d.id === 1)!.used).toBe(false);
+    expect(data.find((d) => d.id === 2)!.used).toBe(true);
   });
 });

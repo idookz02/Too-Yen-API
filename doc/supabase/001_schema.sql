@@ -64,13 +64,15 @@ create index idx_recipe_owner on recipe (user_id);
 create table ingredient (
   ingredient_id bigint generated always as identity primary key,
   name varchar(150) not null,
+  is_active boolean not null default true, -- ingredient is a master (admin CRUD, ADR-003)
   created_at timestamptz not null default now()
 );
 create unique index uq_ingredient_name on ingredient (lower(name)); -- case-insensitive dedupe
 
 create table unit (
   unit_id bigint generated always as identity primary key,
-  name varchar(50) not null,
+  name varchar(100) not null,
+  is_active boolean not null default true, -- unit is a master (admin CRUD, ADR-003)
   created_at timestamptz not null default now()
 );
 create unique index uq_unit_name on unit (lower(name));

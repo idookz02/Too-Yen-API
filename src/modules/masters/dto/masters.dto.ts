@@ -1,11 +1,13 @@
 import { t } from "elysia";
 
-/** The 5 master-data resource types (doc/api/06-admin-master.md). */
+/** The master-data resource types (doc/api/06-admin-master.md). */
 export const MASTER_TYPES = [
   "skill-levels",
   "cooking-methods",
   "categories",
   "equipment",
+  "ingredients",
+  "units",
   "tiers",
 ] as const;
 

@@ -4,8 +4,10 @@ import {
   masterCategory,
   masterCookingMethod,
   masterEquipment,
+  ingredient,
   masterSkillLevel,
   masterTier,
+  unit,
 } from "../../../db/schema";
 import type { MasterTypeParam } from "../dto/masters.dto";
 
@@ -72,6 +74,32 @@ export class MastersRepository {
           .orderBy(asc(masterEquipment.name));
         return rows.map((r) => ({
           id: r.equipmentId,
+          name: r.name,
+          isActive: r.isActive,
+          createdAt: r.createdAt,
+        }));
+      }
+      case "ingredients": {
+        const rows = await executor
+          .select()
+          .from(ingredient)
+          .where(eq(ingredient.isActive, true))
+          .orderBy(asc(ingredient.name));
+        return rows.map((r) => ({
+          id: r.ingredientId,
+          name: r.name,
+          isActive: r.isActive,
+          createdAt: r.createdAt,
+        }));
+      }
+      case "units": {
+        const rows = await executor
+          .select()
+          .from(unit)
+          .where(eq(unit.isActive, true))
+          .orderBy(asc(unit.name));
+        return rows.map((r) => ({
+          id: r.unitId,
           name: r.name,
           isActive: r.isActive,
           createdAt: r.createdAt,

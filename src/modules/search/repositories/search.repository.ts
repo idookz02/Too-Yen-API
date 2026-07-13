@@ -307,7 +307,7 @@ export class SearchRepository {
     return executor
       .select({ ingredientId: ingredient.ingredientId, name: ingredient.name })
       .from(ingredient)
-      .where(ilike(ingredient.name, `${q}%`))
+      .where(and(ilike(ingredient.name, `${q}%`), eq(ingredient.isActive, true)))
       .orderBy(asc(ingredient.name))
       .limit(limit);
   }
@@ -316,7 +316,7 @@ export class SearchRepository {
     return executor
       .select({ unitId: unit.unitId, name: unit.name })
       .from(unit)
-      .where(ilike(unit.name, `${q}%`))
+      .where(and(ilike(unit.name, `${q}%`), eq(unit.isActive, true)))
       .orderBy(asc(unit.name))
       .limit(limit);
   }

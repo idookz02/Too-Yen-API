@@ -47,6 +47,9 @@ export const AdminMasterItemDTO = t.Object({
   in_use_count: t.Number({
     description: "Recipes (or users, for tiers) referencing this entry — delete warning (AC 7)",
   }),
+  used: t.Boolean({
+    description: "Whether this entry is referenced by any recipe (users, for tiers) — in_use_count > 0",
+  }),
   created_at: t.String({ format: "date-time" }),
   min_likes: t.Optional(t.Number()),
 });
