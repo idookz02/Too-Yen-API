@@ -32,6 +32,7 @@ export const recipe = pgTable(
       { onDelete: "restrict" },
     ),
     cookTimeMinutes: integer("cook_time_minutes"), // ADR-011: user-entered minutes
+    servings: integer("servings"), // how many servings the recipe yields (nullable, like cook_time)
     cookingMethodId: bigint("cooking_method_id", { mode: "number" }).references(
       () => masterCookingMethod.cookingMethodId,
       { onDelete: "restrict" },

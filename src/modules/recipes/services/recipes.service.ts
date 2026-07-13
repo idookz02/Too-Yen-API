@@ -91,7 +91,7 @@ export class RecipesService {
    * publish-validation deletes the recipe and every file already uploaded.
    */
   async createFromMultipart(body: Record<string, unknown>, user: CurrentUser) {
-    const { input, cover, stepImages, publish } = this.parseRecipeMultipart(body);
+    const { input, cover, video, stepImages, publish } = this.parseRecipeMultipart(body);
 
     // pre-check before anything is written: every step_image_{n} must point
     // at a step_number present in data.steps
@@ -110,6 +110,9 @@ export class RecipesService {
     try {
       if (cover) {
         await this.addMedia(recipeId, { file: cover, type: "image", is_cover: true }, user);
+      }
+      if (video) {
+        await this.addMedia(recipeId, { file: video, type: "video" }, user);
       }
       for (const [stepNumber, file] of stepImages) {
         await this.putStepImage(recipeId, stepNumber, file, user);
@@ -131,7 +134,7 @@ export class RecipesService {
    * data change stands (retry the image via PUT /steps/{n}/image).
    */
   async updateFromMultipart(recipeId: number, body: Record<string, unknown>, user: CurrentUser) {
-    const { input, cover, stepImages, publish } = this.parseRecipeMultipart(body);
+    const { input, cover, video, stepImages, publish } = this.parseRecipeMultipart(body);
     if (publish) {
       throw badRequest(
         "publish is only supported when creating — use POST /recipes/{id}/publish",
@@ -155,6 +158,13 @@ export class RecipesService {
     if (cover) {
       await this.addMedia(recipeId, { file: cover, type: "image", is_cover: true }, user);
     }
+    if (video) {
+      // one video per recipe (VIDEO_LIMIT) — replace: drop the old (row + file)
+      // before uploading the new one, mirroring how cover swaps in-place
+      const existing = await this.repo.findVideo(recipeId);
+      if (existing) await this.deleteMedia(recipeId, existing.mediaId, user);
+      await this.addMedia(recipeId, { file: video, type: "video" }, user);
+    }
     for (const [stepNumber, file] of stepImages) {
       await this.putStepImage(recipeId, stepNumber, file, user);
     }
@@ -165,6 +175,7 @@ export class RecipesService {
   private parseRecipeMultipart(body: Record<string, unknown>): {
     input: UpsertRecipeInput;
     cover?: File;
+    video?: File;
     stepImages: Map<number, File>;
     publish: boolean;
   } {
@@ -204,6 +215,7 @@ export class RecipesService {
     return {
       input,
       cover: body.cover instanceof File ? body.cover : undefined,
+      video: body.video instanceof File ? body.video : undefined,
       stepImages,
       publish: body.publish === true || body.publish === "true",
     };
@@ -220,6 +232,7 @@ export class RecipesService {
           description: input.description ?? null,
           skillLevelId: input.skill_level_id ?? null,
           cookTimeMinutes: input.cook_time_minutes ?? null,
+          servings: input.servings ?? null,
           cookingMethodId: input.cooking_method_id ?? null,
           categoryId: input.category_id ?? null,
           status: "draft",
@@ -278,6 +291,7 @@ export class RecipesService {
           ...(input.description !== undefined && { description: input.description }),
           ...(input.skill_level_id !== undefined && { skillLevelId: input.skill_level_id }),
           ...(input.cook_time_minutes !== undefined && { cookTimeMinutes: input.cook_time_minutes }),
+          ...(input.servings !== undefined && { servings: input.servings }),
           ...(input.cooking_method_id !== undefined && { cookingMethodId: input.cooking_method_id }),
           ...(input.category_id !== undefined && { categoryId: input.category_id }),
         },
@@ -467,6 +481,7 @@ export class RecipesService {
       ...this.mapCard(card, user),
       description: row.description,
       cook_time_minutes: row.cookTimeMinutes,
+      servings: row.servings,
       skill_level:
         m?.skillLevelId != null ? { id: m.skillLevelId, name: m.skillLevelName! } : null,
       cooking_method:

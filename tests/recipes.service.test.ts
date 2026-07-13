@@ -47,6 +47,7 @@ const makeRow = (over: Partial<RecipeRow> = {}): RecipeRow => ({
   description: "desc",
   skillLevelId: 1,
   cookTimeMinutes: 30,
+  servings: 4,
   cookingMethodId: 2,
   categoryId: 3,
   status: "draft",
@@ -199,6 +200,8 @@ function makeRepo(state: State) {
       }
       return null;
     },
+    findVideo: async (id: number) =>
+      (state.media.get(id) ?? []).find((m) => m.mediaType === "video") ?? null,
     deleteMedia: async (mediaId: number) => {
       for (const [id, list] of state.media) {
         state.media.set(id, list.filter((m) => m.mediaId !== mediaId));
@@ -595,6 +598,8 @@ describe("createFromMultipart", () => {
       steps: [{ step_number: 1, instruction: "Cook" }],
     });
 
+  const mp4 = () => new File(["x"], "clip.mp4", { type: "video/mp4" });
+
   it("creates draft + cover + step image in one call", async () => {
     const res = await service.createFromMultipart(
       { data: completeData(), cover: png(), step_image_1: png() },
@@ -603,6 +608,21 @@ describe("createFromMultipart", () => {
     expect(res.status).toBe("draft");
     expect(res.media.filter((m) => m.is_cover)).toHaveLength(1);
     expect(res.steps[0]!.image_url).not.toBeNull();
+  });
+
+  it("stores servings and a video in the same create call", async () => {
+    const res = await service.createFromMultipart(
+      {
+        data: JSON.stringify({ recipe_name: "Yen", servings: 6 }),
+        cover: png(),
+        video: mp4(),
+      },
+      owner,
+    );
+    expect(res.servings).toBe(6);
+    const vids = res.media.filter((m) => m.type === "video");
+    expect(vids).toHaveLength(1);
+    expect(vids[0]!.is_cover).toBe(false);
   });
 
   it("publish=true publishes in the same request", async () => {
@@ -725,6 +745,27 @@ describe("updateFromMultipart", () => {
       400,
       "VALIDATION_ERROR",
     );
+  });
+
+  it("video on PATCH replaces the existing one (no VIDEO_LIMIT)", async () => {
+    seedComplete(state);
+    const mp4 = () => new File(["x"], "clip.mp4", { type: "video/mp4" });
+    // first video
+    await service.updateFromMultipart(1, { video: mp4() }, owner);
+    expect(state.media.get(1)!.filter((m) => m.mediaType === "video")).toHaveLength(1);
+    // second video swaps in-place instead of 409
+    const res = await service.updateFromMultipart(1, { video: mp4() }, owner);
+    expect(res.media.filter((m) => m.type === "video")).toHaveLength(1);
+  });
+
+  it("updates servings via data", async () => {
+    seedComplete(state);
+    const res = await service.updateFromMultipart(
+      1,
+      { data: JSON.stringify({ servings: 8 }) },
+      owner,
+    );
+    expect(res.servings).toBe(8);
   });
 });
 

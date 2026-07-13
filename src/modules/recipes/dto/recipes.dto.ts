@@ -54,6 +54,7 @@ export const UpsertRecipeDTO = t.Object({
   recipe_name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   description: t.Optional(t.String({ minLength: 1 })),
   cook_time_minutes: t.Optional(t.Integer({ minimum: 1 })),
+  servings: t.Optional(t.Integer({ minimum: 1, examples: [4] })),
   skill_level_id: t.Optional(t.Integer({ minimum: 1 })),
   cooking_method_id: t.Optional(t.Integer({ minimum: 1 })),
   category_id: t.Optional(t.Integer({ minimum: 1 })),
@@ -82,6 +83,7 @@ export const MultipartRecipeBodyDTO = t.Object(
       ]),
     ),
     cover: t.Optional(t.File({ type: "image" })),
+    video: t.Optional(t.File({ type: "video" })),
     publish: t.Optional(
       t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")]),
     ),
@@ -152,6 +154,7 @@ export const RecipeDetailDTO = t.Composite([
   t.Object({
     description: NullableString,
     cook_time_minutes: NullableNumber,
+    servings: NullableNumber,
     skill_level: NullableIdName,
     cooking_method: NullableIdName,
     category: NullableIdName,

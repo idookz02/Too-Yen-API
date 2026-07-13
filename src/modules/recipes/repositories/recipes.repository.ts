@@ -473,6 +473,16 @@ export class RecipesRepository {
     return created;
   }
 
+  /** The recipe's single video (VIDEO_LIMIT caps at one), or null. */
+  async findVideo(recipeId: number, executor: Executor = db): Promise<MediaRow | null> {
+    const [row] = await executor
+      .select()
+      .from(recipeMedia)
+      .where(and(eq(recipeMedia.recipeId, recipeId), eq(recipeMedia.mediaType, "video")))
+      .limit(1);
+    return row ?? null;
+  }
+
   async findMedia(mediaId: number, executor: Executor = db): Promise<MediaRow | null> {
     const [row] = await executor
       .select()

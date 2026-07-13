@@ -35,7 +35,7 @@ draft/private: owner only (`403 FORBIDDEN`)
 Response `200`: card fields above, plus:
 
 ```json
-{ "description": "...", "cook_time_minutes": 30,
+{ "description": "...", "cook_time_minutes": 30, "servings": 4,
   "skill_level": { "id": 1, "name": "Beginner" },
   "cooking_method": { "id": 2, "name": "Boil" },
   "category": { "id": 3, "name": "Thai" },
@@ -56,13 +56,14 @@ Form fields:
 |-------|------|---------|
 | `data` | JSON string | the recipe fields (same shape as the old JSON body below); omit for an empty draft |
 | `cover` | image file | optional — becomes the cover (compressed per the media rules) |
+| `video` | video file | optional — attaches the recipe's single video (one per recipe; on PATCH it replaces the existing one, deleting the old file) |
 | `step_image_{n}` | image file | optional — image for `step_number` n in `data.steps` (n must exist there → else `400`) |
 | `publish` | `true` | optional — validate the AC M2-1 checklist and publish immediately (`400 INCOMPLETE_RECIPE` with `details[]` when incomplete); omitted = draft (AC M1-5: partial fields allowed) |
 
 `data` shape:
 
 ```json
-{ "recipe_name": "Tom Yum Goong", "description": "...", "cook_time_minutes": 30,
+{ "recipe_name": "Tom Yum Goong", "description": "...", "cook_time_minutes": 30, "servings": 4,
   "skill_level_id": 1, "cooking_method_id": 2, "category_id": 3,
   "equipment_ids": [1, 4],
   "ingredients": [ { "name": "Shrimp", "amount": 300, "unit_name": "gram" } ],

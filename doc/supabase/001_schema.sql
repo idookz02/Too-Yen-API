@@ -49,6 +49,7 @@ create table recipe (
   description text, -- nullable while draft, required at publish (app-enforced)
   skill_level_id bigint references master_skill_level(skill_level_id) on delete restrict,
   cook_time_minutes int, -- ADR-011: user-entered minutes, range filter in search
+  servings int, -- how many servings the recipe yields (nullable)
   cooking_method_id bigint references master_cooking_method(cooking_method_id) on delete restrict,
   category_id bigint references master_category(category_id) on delete restrict,
   status text not null default 'draft' check (status in ('draft','published','private')),
