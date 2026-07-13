@@ -15,7 +15,7 @@ Base URL: `/api/v1` | References: data-dictionary-en.md, ADR-001–012 | 2026-07
 | 3 | Recipes | [03-recipes.md](03-recipes.md) | feed, CRUD, draft/publish/visibility, media |
 | 4 | Engagement | [04-engagement.md](04-engagement.md) | like, favorite, comment |
 | 5 | Search | [05-search.md](05-search.md) | keyword, advanced, recent, autocomplete |
-| 6 | Admin Master | [06-admin-master.md](06-admin-master.md) | 4 master data types + tiers |
+| 6 | Admin Master | [06-admin-master.md](06-admin-master.md) | 6 master data types (skill-levels, cooking-methods, categories, equipment, ingredients, units) + tiers |
 
 ## Conventions
 

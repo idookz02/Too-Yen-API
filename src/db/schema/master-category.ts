@@ -9,4 +9,7 @@ export const masterCategory = pgTable("master_category", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }) // set_updated_at() trigger
+    .notNull()
+    .defaultNow(),
 });

@@ -578,10 +578,15 @@
                 {
                   "key": "data",
                   "type": "text",
-                  "value": "{\"recipe_name\":\"string\",\"description\":\"string\",\"cook_time_minutes\":0,\"skill_level_id\":0,\"cooking_method_id\":0,\"category_id\":0,\"equipment_ids\":[0],\"ingredients\":[{\"name\":\"string\",\"amount\":0,\"unit_name\":\"string\"}],\"steps\":[{\"step_number\":0,\"instruction\":\"string\"}]}"
+                  "value": "{\"recipe_name\":\"string\",\"description\":\"string\",\"cook_time_minutes\":0,\"servings\":0,\"skill_level_id\":0,\"cooking_method_id\":0,\"category_id\":0,\"equipment_ids\":[0],\"ingredients\":[{\"name\":\"string\",\"amount\":0,\"unit_name\":\"string\"}],\"steps\":[{\"step_number\":0,\"instruction\":\"string\"}]}"
                 },
                 {
                   "key": "cover",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "video",
                   "type": "file",
                   "src": []
                 },
@@ -672,10 +677,15 @@
                 {
                   "key": "data",
                   "type": "text",
-                  "value": "{\"recipe_name\":\"string\",\"description\":\"string\",\"cook_time_minutes\":0,\"skill_level_id\":0,\"cooking_method_id\":0,\"category_id\":0,\"equipment_ids\":[0],\"ingredients\":[{\"name\":\"string\",\"amount\":0,\"unit_name\":\"string\"}],\"steps\":[{\"step_number\":0,\"instruction\":\"string\"}]}"
+                  "value": "{\"recipe_name\":\"string\",\"description\":\"string\",\"cook_time_minutes\":0,\"servings\":0,\"skill_level_id\":0,\"cooking_method_id\":0,\"category_id\":0,\"equipment_ids\":[0],\"ingredients\":[{\"name\":\"string\",\"amount\":0,\"unit_name\":\"string\"}],\"steps\":[{\"step_number\":0,\"instruction\":\"string\"}]}"
                 },
                 {
                   "key": "cover",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "video",
                   "type": "file",
                   "src": []
                 },

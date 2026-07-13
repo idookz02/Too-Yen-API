@@ -19,6 +19,9 @@ export const users = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }) // set_updated_at() trigger
+      .notNull()
+      .defaultNow(),
     // added by 003_user_tier.sql; set by DB trigger on insert (ADR-012)
     tierId: bigint("tier_id", { mode: "number" }).references(
       () => masterTier.tierId,

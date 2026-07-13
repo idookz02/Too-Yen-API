@@ -20,6 +20,7 @@ Conventions: PK = Primary Key, FK = Foreign Key, UK = Unique | FK ON DELETE beha
 | role | ENUM('user','admin') | NO | | Access role; admin can access the Master Data console |
 | tier_id | BIGINT | YES | FK → master_tier | User tier from total likes, trigger-maintained (ADR-012) |
 | created_at | DATETIME | NO | | Account creation time |
+| updated_at | DATETIME | NO | | Last updated, stamped by the `set_updated_at()` BEFORE UPDATE trigger |
 
 Constraints: UNIQUE(email), UNIQUE(username)
 FK behavior: tier_id RESTRICT (master_tier uses soft delete) | trigger `user_insert_tier` assigns the base tier on signup (ADR-012)
@@ -36,6 +37,7 @@ Identical structure across all 4 tables; only the PK name differs (`skill_level_
 | name | VARCHAR(100) | NO | UK | Entry name, unique per type |
 | is_active | BOOLEAN | NO | | Soft delete — FALSE hides the entry from selection lists while existing recipe references stay intact (ADR-003) |
 | created_at | DATETIME | NO | | Created time |
+| updated_at | DATETIME | NO | | Last updated, stamped by the `set_updated_at()` BEFORE UPDATE trigger |
 
 Constraints: UNIQUE(name) per table | Admin "Delete" sets `is_active = FALSE`; rows are never physically removed
 
@@ -50,6 +52,7 @@ Constraints: UNIQUE(name) per table | Admin "Delete" sets `is_active = FALSE`; r
 | min_likes | INT | NO | UK | Minimum total likes threshold — a user holds the highest tier whose threshold they meet |
 | is_active | BOOLEAN | NO | | Soft delete, same convention as other masters (ADR-003) |
 | created_at | DATETIME | NO | | Created time |
+| updated_at | DATETIME | NO | | Last updated, stamped by the `set_updated_at()` BEFORE UPDATE trigger |
 
 Constraints: UNIQUE(name), UNIQUE(min_likes) | `users.tier_id` is maintained by triggers on recipe_like (insert/delete), recipe (delete), and users (insert) via `recalc_user_tier()` — counts likes across all existing recipes of the user, any status
 
@@ -65,6 +68,7 @@ Constraints: UNIQUE(name), UNIQUE(min_likes) | `users.tier_id` is maintained by 
 | description | TEXT | YES | | Recipe description, required at publish (app-enforced) |
 | skill_level_id | BIGINT | YES | FK → master_skill_level | Skill level |
 | cook_time_minutes | INT | YES | | Cooking time in minutes, user-entered, range-filterable in search (ADR-011) |
+| servings | INT | YES | | How many servings the recipe yields, user-entered |
 | cooking_method_id | BIGINT | YES | FK → master_cooking_method | Cooking method |
 | category_id | BIGINT | YES | FK → master_category | Category |
 | status | ENUM('draft','published','private') | NO | | Post status (ADR-005) |
@@ -77,25 +81,33 @@ Notes: attribute FKs may be NULL only while draft — completeness enforced at p
 
 ---
 
-## 4. ingredient — Shared ingredient list (ADR-001)
+## 4. ingredient — Shared ingredient list (ADR-001) — also an admin master (2026-07-13)
+
+Grown from free-text on recipe save (find-or-create, ADR-001) **and** managed via admin master CRUD (`{type}=ingredients`); soft-deleted rows reactivate on reuse and are hidden from autocomplete/dropdowns.
 
 | Column | Type | Null | Key | Description |
 |--------|------|------|-----|-------------|
 | ingredient_id | BIGINT | NO | PK | Ingredient ID |
 | name | VARCHAR(150) | NO | UK | Ingredient name, grown from user autocomplete input |
+| is_active | BOOLEAN | NO | | Soft delete (ADR-003) — hidden from selection, existing recipe references stay intact |
 | created_at | DATETIME | NO | | Created time |
+| updated_at | DATETIME | NO | | Last updated, stamped by the `set_updated_at()` BEFORE UPDATE trigger |
 
 Constraints: UNIQUE(lower(name)) — case-insensitive dedupe on insert
 
 ---
 
-## 5. unit — Measurement units (ADR-007)
+## 5. unit — Measurement units (ADR-007) — also an admin master (2026-07-13)
+
+Grown from free-text on recipe save (find-or-create, ADR-007) **and** managed via admin master CRUD (`{type}=units`); soft-deleted rows reactivate on reuse and are hidden from autocomplete/dropdowns.
 
 | Column | Type | Null | Key | Description |
 |--------|------|------|-----|-------------|
 | unit_id | BIGINT | NO | PK | Unit ID |
-| name | VARCHAR(50) | NO | UK | Unit name (tbsp, gram, ...) — shared list across all ingredients, grown from autocomplete |
+| name | VARCHAR(100) | NO | UK | Unit name (tbsp, gram, ...) — shared list across all ingredients, grown from autocomplete |
+| is_active | BOOLEAN | NO | | Soft delete (ADR-003) — hidden from selection, existing recipe references stay intact |
 | created_at | DATETIME | NO | | Created time |
+| updated_at | DATETIME | NO | | Last updated, stamped by the `set_updated_at()` BEFORE UPDATE trigger |
 
 Constraints: UNIQUE(lower(name))
 
@@ -155,7 +167,9 @@ FK behavior: recipe_id CASCADE
 | is_cover | BOOLEAN | NO | | Cover image; only one TRUE per recipe (app-enforced) |
 | sort_order | INT | NO | | Gallery order |
 | created_at | DATETIME | NO | | Upload time |
+| updated_at | DATETIME | NO | | Last updated, stamped by the `set_updated_at()` BEFORE UPDATE trigger |
 
+Video (like the cover) can be attached in the same POST/PATCH /recipes multipart request via the `video` field; on PATCH it replaces the existing video (max 1 per recipe).
 FK behavior: recipe_id CASCADE — files on Supabase Storage are NOT removed automatically; a cleanup job is required
 
 ---

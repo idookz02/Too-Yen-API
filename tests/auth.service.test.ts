@@ -19,6 +19,7 @@ const BASE_USER: UserRow = {
   profilePicturePath: null,
   role: "user",
   createdAt: new Date("2026-07-10T00:00:00Z"),
+  updatedAt: new Date("2026-07-10T00:00:00Z"),
   tierId: 1,
 };
 

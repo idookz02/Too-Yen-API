@@ -18,6 +18,7 @@ const makeMe = (over: Partial<MeRow["user"]> = {}): MeRow => ({
     profilePicturePath: null,
     role: "user",
     createdAt: new Date("2026-07-09T08:00:00Z"),
+    updatedAt: new Date("2026-07-09T08:00:00Z"),
     tierId: 2,
     ...over,
   },

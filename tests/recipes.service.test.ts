@@ -76,6 +76,7 @@ function seedComplete(state: State, over: Partial<RecipeRow> = {}) {
       isCover: true,
       sortOrder: 0,
       createdAt: new Date(),
+      updatedAt: new Date(),
     },
   ]);
   return row;
