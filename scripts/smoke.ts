@@ -133,6 +133,7 @@ const masterIds: Record<string, number> = {};
 section("recipes");
 let recipeId = 0;
 let ingredientId = 0;
+let equipmentId = 0;
 {
   const recipeData = {
     recipe_name: `Smoke Curry ${TS}`,
@@ -141,7 +142,8 @@ let ingredientId = 0;
     skill_level_id: masterIds["skill-levels"],
     cooking_method_id: masterIds["cooking-methods"],
     category_id: masterIds["categories"],
-    equipment_ids: [masterIds["equipment"]],
+    // equipment by id (dropdown) + a new one by name (find-or-created into master)
+    equipment: [{ equipment_id: masterIds["equipment"] }, { name: `Smoke Gadget ${TS}` }],
     ingredients: [{ name: `Smoke Ingredient ${TS}`, amount: 2, unit_name: "cup" }],
     steps: [{ step_number: 1, instruction: "Stir everything." }],
   };
@@ -149,8 +151,10 @@ let ingredientId = 0;
   createForm.append("data", JSON.stringify(recipeData));
   const create = await api("/recipes", { method: "POST", token, form: createForm });
   ok("create draft -> 201", create.status === 201 && create.data.status === "draft", create.data);
+  ok("equipment id + new name both attached (2 rows)", create.data.equipment?.length === 2, create.data.equipment);
   recipeId = create.data.recipe_id;
   ingredientId = create.data.ingredients?.[0]?.ingredient_id ?? 0;
+  equipmentId = create.data.equipment?.find((e: { name: string }) => e.name.includes("Gadget"))?.id ?? 0;
 
   const early = await api(`/recipes/${recipeId}/publish`, { method: "POST", token });
   ok("publish without cover -> 400 INCOMPLETE_RECIPE [cover_image]", early.status === 400 && early.data.error.code === "INCOMPLETE_RECIPE" && early.data.error.details?.includes("cover_image"));
@@ -170,6 +174,52 @@ let ingredientId = 0;
 
   const detail = await api(`/recipes/${recipeId}`, { token });
   ok("detail -> 200 with ingredients/steps/media", detail.status === 200 && detail.data.ingredients.length === 1 && detail.data.media.length === 1);
+  const unitId = detail.data.ingredients?.[0]?.unit?.id ?? 0;
+
+  // ingredient by id (dropdown pick) — reuses the master row, no new ingredient created
+  const byIdForm = new FormData();
+  byIdForm.append(
+    "data",
+    JSON.stringify({
+      // only send unit_id when we actually captured one (0 would fail minimum:1)
+      ingredients: [{ ingredient_id: ingredientId, amount: 3, ...(unitId > 0 && { unit_id: unitId }) }],
+    }),
+  );
+  const byId = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: byIdForm });
+  ok(
+    "ingredient by ingredient_id (dropdown) -> 200, same master id reused",
+    byId.status === 200 && byId.data.ingredients?.[0]?.ingredient_id === ingredientId,
+    byId.data,
+  );
+
+  // a not-found ingredient_id is rejected before any write
+  const badIdForm = new FormData();
+  badIdForm.append("data", JSON.stringify({ ingredients: [{ ingredient_id: 999999999 }] }));
+  const badId = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: badIdForm });
+  ok(
+    "not-found ingredient_id -> 400 VALIDATION_ERROR",
+    badId.status === 400 && badId.data.error?.code === "VALIDATION_ERROR",
+    badId.data,
+  );
+
+  // equipment by id (dropdown) reuses the master row; a not-found id is rejected
+  const eqByIdForm = new FormData();
+  eqByIdForm.append("data", JSON.stringify({ equipment: [{ equipment_id: equipmentId }] }));
+  const eqById = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: eqByIdForm });
+  ok(
+    "equipment by equipment_id (dropdown) -> 200, same master id reused",
+    eqById.status === 200 && eqById.data.equipment?.[0]?.id === equipmentId,
+    eqById.data,
+  );
+
+  const badEqForm = new FormData();
+  badEqForm.append("data", JSON.stringify({ equipment: [{ equipment_id: 999999999 }] }));
+  const badEq = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: badEqForm });
+  ok(
+    "not-found equipment_id -> 400 VALIDATION_ERROR",
+    badEq.status === 400 && badEq.data.error?.code === "VALIDATION_ERROR",
+    badEq.data,
+  );
 
   const patchForm = new FormData();
   patchForm.append("data", JSON.stringify({ description: "Updated by smoke" }));
@@ -197,13 +247,13 @@ section("recipes — single-shot create (multipart + publish)");
       skill_level_id: masterIds["skill-levels"],
       cooking_method_id: masterIds["cooking-methods"],
       category_id: masterIds["categories"],
-      equipment_ids: [masterIds["equipment"]],
+      equipment: [{ equipment_id: masterIds["equipment"] }],
       ingredients: [{ name: `Smoke Ingredient ${TS}` }],
-      steps: [{ step_number: 1, instruction: "Mix." }],
+      steps: [{ step_number: 1, instruction: "Mix.", image_field: "step1" }],
     }),
   );
   oneShotForm.append("cover", await pngFile("oneshot-cover.png"));
-  oneShotForm.append("step_image_1", await pngFile("oneshot-step.png"));
+  oneShotForm.append("step1", await pngFile("oneshot-step.png"));
   oneShotForm.append("publish", "true");
   const oneShot = await api("/recipes", { method: "POST", token, form: oneShotForm });
   ok(
@@ -303,7 +353,7 @@ section("admin master");
 
   if (adminToken) {
     const types = await api("/admin/master/types", { token: adminToken });
-    ok("GET /admin/master/types -> 200 (5 types)", types.status === 200 && types.data.types.length === 5);
+    ok("GET /admin/master/types -> 200 (7 types)", types.status === 200 && types.data.types.length === 7);
 
     const name = `Smoke Equipment ${TS}`;
     const created = await api("/admin/master/equipment", { method: "POST", token: adminToken, json: { name } });
@@ -318,6 +368,31 @@ section("admin master");
     const revived = await api("/admin/master/equipment", { method: "POST", token: adminToken, json: { name } });
     ok("re-create reactivates the same row (ADR-003)", revived.status === 201 && revived.data.id === created.data.id);
     await api(`/admin/master/equipment/${created.data.id}`, { method: "DELETE", token: adminToken }); // leave it inactive
+
+    // a soft-deleted ingredient referenced by id on recipe save is reactivated (ADR-003)
+    const ingName = `Smoke Reactivate ${TS}`;
+    const ing = await api("/admin/master/ingredients", { method: "POST", token: adminToken, json: { name: ingName } });
+    ok("create ingredient master -> 201", ing.status === 201);
+    const softDel = await api(`/admin/master/ingredients/${ing.data.id}`, { method: "DELETE", token: adminToken });
+    ok("soft delete ingredient -> 204", softDel.status === 204);
+
+    const reuseForm = new FormData();
+    reuseForm.append("data", JSON.stringify({ ingredients: [{ ingredient_id: ing.data.id }] }));
+    const reuse = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: reuseForm });
+    ok("recipe save by soft-deleted ingredient_id -> 200", reuse.status === 200 && reuse.data.ingredients?.[0]?.ingredient_id === ing.data.id, reuse.data);
+
+    const relist = await api("/admin/master/ingredients", { token: adminToken });
+    const back = relist.data?.data?.find((r: { id: number; is_active?: boolean }) => r.id === ing.data.id);
+    ok("the referenced ingredient is reactivated (is_active=true)", relist.status === 200 && back?.is_active === true, back);
+
+    // same reactivation path for equipment — `created.data.id` was left inactive above
+    const eqReuseForm = new FormData();
+    eqReuseForm.append("data", JSON.stringify({ equipment: [{ equipment_id: created.data.id }] }));
+    const eqReuse = await api(`/recipes/${recipeId}`, { method: "PATCH", token, form: eqReuseForm });
+    ok("recipe save by soft-deleted equipment_id -> 200", eqReuse.status === 200 && eqReuse.data.equipment?.[0]?.id === created.data.id, eqReuse.data);
+    const eqRelist = await api("/admin/master/equipment", { token: adminToken });
+    const eqBack = eqRelist.data?.data?.find((r: { id: number; is_active?: boolean }) => r.id === created.data.id);
+    ok("the referenced equipment is reactivated (is_active=true)", eqRelist.status === 200 && eqBack?.is_active === true, eqBack);
   } else {
     ok("admin flow skipped — admin login failed (run db:seed first)", false);
   }

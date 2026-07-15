@@ -93,18 +93,6 @@ export class RecipesService {
   async createFromMultipart(body: Record<string, unknown>, user: CurrentUser) {
     const { input, cover, video, stepImages, publish } = this.parseRecipeMultipart(body);
 
-    // pre-check before anything is written: every step_image_{n} must point
-    // at a step_number present in data.steps
-    const stepNumbers = new Set((input.steps ?? []).map((s) => s.step_number));
-    for (const n of stepImages.keys()) {
-      if (!stepNumbers.has(n)) {
-        throw badRequest(
-          `step_image_${n} has no matching step_number in data.steps`,
-          "VALIDATION_ERROR",
-        );
-      }
-    }
-
     const created = await this.create(input, user);
     const recipeId = created.recipe_id;
     try {
@@ -141,19 +129,6 @@ export class RecipesService {
         "VALIDATION_ERROR",
       );
     }
-    // when data.steps replaces the set, step images must reference the new set
-    if (input.steps) {
-      const stepNumbers = new Set(input.steps.map((s) => s.step_number));
-      for (const n of stepImages.keys()) {
-        if (!stepNumbers.has(n)) {
-          throw badRequest(
-            `step_image_${n} has no matching step_number in data.steps`,
-            "VALIDATION_ERROR",
-          );
-        }
-      }
-    }
-
     await this.update(recipeId, input, user);
     if (cover) {
       await this.addMedia(recipeId, { file: cover, type: "image", is_cover: true }, user);
@@ -171,7 +146,8 @@ export class RecipesService {
     return this.getDetail(recipeId, user);
   }
 
-  /** Parse + validate the multipart body: data JSON, cover, step_image_{n}, publish. */
+  /** Parse + validate the multipart body: data JSON, cover, video, per-step
+   *  image parts (resolved via each step's image_field), publish. */
   private parseRecipeMultipart(body: Record<string, unknown>): {
     input: UpsertRecipeInput;
     cover?: File;
@@ -202,14 +178,28 @@ export class RecipesService {
       input = parsed;
     }
 
+    // Each step names its image via `image_field` = a multipart file part.
+    // Resolve here so createFromMultipart's all-or-nothing contract can reject a
+    // missing/invalid/reserved field BEFORE any DB or storage write.
+    const RESERVED = new Set(["data", "cover", "video", "publish"]);
     const stepImages = new Map<number, File>();
-    for (const [key, value] of Object.entries(body)) {
-      const match = /^step_image_(\d+)$/.exec(key);
-      if (!match) continue;
-      if (!(value instanceof File) || !value.type.startsWith("image/")) {
-        throw badRequest(`${key} must be an image file`, "VALIDATION_ERROR");
+    for (const step of input.steps ?? []) {
+      const field = step.image_field;
+      if (field == null) continue;
+      if (RESERVED.has(field)) {
+        throw badRequest(
+          `step_number ${step.step_number}: image_field "${field}" is a reserved field name`,
+          "VALIDATION_ERROR",
+        );
       }
-      stepImages.set(Number(match[1]), value);
+      const value = body[field];
+      if (!(value instanceof File) || !value.type.startsWith("image/")) {
+        throw badRequest(
+          `step_number ${step.step_number}: image_field "${field}" must reference an uploaded image file part`,
+          "VALIDATION_ERROR",
+        );
+      }
+      stepImages.set(step.step_number, value);
     }
 
     return {
@@ -223,6 +213,8 @@ export class RecipesService {
 
   // POST /recipes — always a draft (AC M1-5: partial fields allowed)
   async create(input: UpsertRecipeInput, user: CurrentUser) {
+    this.assertIngredientRefs(input.ingredients);
+    this.assertEquipmentRefs(input.equipment);
     this.assertUniqueStepNumbers(input.steps);
     const recipeId = await this.repo.transaction(async (tx) => {
       const created = await this.repo.insertRecipe(
@@ -239,8 +231,8 @@ export class RecipesService {
         },
         tx,
       );
-      if (input.equipment_ids) {
-        await this.repo.replaceEquipment(created.recipeId, input.equipment_ids, tx);
+      if (input.equipment) {
+        await this.repo.replaceEquipment(created.recipeId, input.equipment, tx);
       }
       if (input.ingredients) {
         await this.repo.replaceIngredients(created.recipeId, input.ingredients, tx);
@@ -253,6 +245,8 @@ export class RecipesService {
 
   // PATCH /recipes/{id} — partial update; array fields replace the whole set
   async update(recipeId: number, input: UpsertRecipeInput, user: CurrentUser) {
+    this.assertIngredientRefs(input.ingredients);
+    this.assertEquipmentRefs(input.equipment);
     this.assertUniqueStepNumbers(input.steps);
     const current = await this.requireOwned(recipeId, user);
 
@@ -268,7 +262,7 @@ export class RecipesService {
           cookingMethodId: input.cooking_method_id ?? current.row.cookingMethodId,
           categoryId: input.category_id ?? current.row.categoryId,
         },
-        equipmentCount: input.equipment_ids?.length ?? current.equipmentCount,
+        equipmentCount: input.equipment?.length ?? current.equipmentCount,
         ingredientCount: input.ingredients?.length ?? current.ingredientCount,
         stepCount: input.steps?.length ?? current.stepCount,
         hasCover: current.hasCover,
@@ -297,8 +291,8 @@ export class RecipesService {
         },
         tx,
       );
-      if (input.equipment_ids) {
-        await this.repo.replaceEquipment(recipeId, input.equipment_ids, tx);
+      if (input.equipment) {
+        await this.repo.replaceEquipment(recipeId, input.equipment, tx);
       }
       if (input.ingredients) {
         await this.repo.replaceIngredients(recipeId, input.ingredients, tx);
@@ -458,6 +452,26 @@ export class RecipesService {
       throw forbidden("Only the owner can modify this recipe", "FORBIDDEN");
     }
     return c;
+  }
+
+  /** Each ingredient must carry an ingredient_id (dropdown) or a name (new). */
+  private assertIngredientRefs(ingredients?: UpsertRecipeInput["ingredients"]) {
+    if (!ingredients) return;
+    for (const i of ingredients) {
+      if (i.ingredient_id == null && !i.name) {
+        throw badRequest("Each ingredient needs an ingredient_id or a name", "VALIDATION_ERROR");
+      }
+    }
+  }
+
+  /** Each equipment must carry an equipment_id (dropdown) or a name (new). */
+  private assertEquipmentRefs(equipment?: UpsertRecipeInput["equipment"]) {
+    if (!equipment) return;
+    for (const e of equipment) {
+      if (e.equipment_id == null && !e.name) {
+        throw badRequest("Each equipment needs an equipment_id or a name", "VALIDATION_ERROR");
+      }
+    }
   }
 
   private assertUniqueStepNumbers(steps?: { step_number: number }[]) {

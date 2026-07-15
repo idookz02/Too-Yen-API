@@ -36,10 +36,11 @@ create table master_category (
 
 create table master_equipment (
   equipment_id bigint generated always as identity primary key,
-  name varchar(100) not null unique,
+  name varchar(100) not null,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
+create unique index uq_master_equipment_name on master_equipment (lower(name)); -- case-insensitive dedupe
 
 -- ===== Recipe (ADR-005) =====
 create table recipe (

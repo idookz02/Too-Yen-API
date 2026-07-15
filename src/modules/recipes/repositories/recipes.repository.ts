@@ -19,6 +19,7 @@ import {
   users,
 } from "../../../db/schema";
 import type { RecipeSort } from "../dto/recipes.dto";
+import { badRequest } from "../../../shared/utils/errors";
 
 export type RecipeRow = typeof recipe.$inferSelect;
 export type MediaRow = typeof recipeMedia.$inferSelect;
@@ -39,7 +40,17 @@ export type CardRow = {
   favoritedByMe: boolean;
 };
 
-export type IngredientInput = { name: string; amount?: number; unit_name?: string };
+/** id-first (dropdown) or name (new → find-or-created). At least one of
+ *  ingredient_id/name; id wins when both present. Unit likewise, but optional. */
+export type IngredientInput = {
+  ingredient_id?: number;
+  name?: string;
+  amount?: number;
+  unit_id?: number;
+  unit_name?: string;
+};
+/** id-first (dropdown) or name (new → find-or-created); id wins, at least one. */
+export type EquipmentInput = { equipment_id?: number; name?: string };
 export type StepInput = { step_number: number; instruction: string };
 
 /** Counts + field presence used by the publish/integrity checks. */
@@ -347,6 +358,99 @@ export class RecipesRepository {
     return again.id;
   }
 
+  /** find-or-create by lower(name), mirroring the ingredient path (ADR-003).
+   *  Admin dedupes equipment case-insensitively at the app level too. */
+  private async findOrCreateEquipment(name: string, executor: Executor): Promise<number> {
+    const byName = () =>
+      executor
+        .select({ id: masterEquipment.equipmentId, isActive: masterEquipment.isActive })
+        .from(masterEquipment)
+        .where(sql`lower(${masterEquipment.name}) = lower(${name})`)
+        .limit(1);
+    const [existing] = await byName();
+    if (existing) {
+      if (!existing.isActive) {
+        await executor
+          .update(masterEquipment)
+          .set({ isActive: true })
+          .where(eq(masterEquipment.equipmentId, existing.id));
+      }
+      return existing.id;
+    }
+    const [inserted] = await executor
+      .insert(masterEquipment)
+      .values({ name })
+      .onConflictDoNothing()
+      .returning({ id: masterEquipment.equipmentId });
+    if (inserted) return inserted.id;
+    const [again] = await byName();
+    if (!again) throw new Error(`findOrCreateEquipment failed for "${name}"`);
+    return again.id;
+  }
+
+  /** Resolve a master id from a dropdown pick, reactivating a soft-deleted row
+   *  (ADR-003). A not-found id is a 400 (client chose this over 404). */
+  private async requireActiveId(
+    id: number,
+    table: typeof ingredient | typeof unit | typeof masterEquipment,
+    idCol:
+      | typeof ingredient.ingredientId
+      | typeof unit.unitId
+      | typeof masterEquipment.equipmentId,
+    label: string,
+    executor: Executor,
+  ): Promise<number> {
+    const [row] = await executor
+      .select({ id: idCol, isActive: table.isActive })
+      .from(table)
+      .where(eq(idCol, id))
+      .limit(1);
+    if (!row) throw badRequest(`${label} ${id} not found`, "VALIDATION_ERROR");
+    if (!row.isActive) {
+      await executor.update(table).set({ isActive: true }).where(eq(idCol, row.id));
+    }
+    return row.id;
+  }
+
+  /** id wins; else find-or-create by name; else 400 (an ingredient needs one). */
+  private async resolveIngredientId(item: IngredientInput, executor: Executor): Promise<number> {
+    if (item.ingredient_id != null) {
+      return this.requireActiveId(
+        item.ingredient_id,
+        ingredient,
+        ingredient.ingredientId,
+        "ingredient_id",
+        executor,
+      );
+    }
+    if (item.name) return this.findOrCreateIngredient(item.name, executor);
+    throw badRequest("Each ingredient needs an ingredient_id or a name", "VALIDATION_ERROR");
+  }
+
+  /** id wins; else find-or-create by name; else 400 (equipment needs one). */
+  private async resolveEquipmentId(item: EquipmentInput, executor: Executor): Promise<number> {
+    if (item.equipment_id != null) {
+      return this.requireActiveId(
+        item.equipment_id,
+        masterEquipment,
+        masterEquipment.equipmentId,
+        "equipment_id",
+        executor,
+      );
+    }
+    if (item.name) return this.findOrCreateEquipment(item.name, executor);
+    throw badRequest("Each equipment needs an equipment_id or a name", "VALIDATION_ERROR");
+  }
+
+  /** id wins; else find-or-create by name; else null (unit is optional). */
+  private async resolveUnitId(item: IngredientInput, executor: Executor): Promise<number | null> {
+    if (item.unit_id != null) {
+      return this.requireActiveId(item.unit_id, unit, unit.unitId, "unit_id", executor);
+    }
+    if (item.unit_name) return this.findOrCreateUnit(item.unit_name, executor);
+    return null;
+  }
+
   /** Replace the whole ingredient set (doc: replace-set semantics). */
   async replaceIngredients(
     recipeId: number,
@@ -357,15 +461,17 @@ export class RecipesRepository {
     const seen = new Set<number>();
     let sortOrder = 0;
     for (const item of items) {
-      const ingredientId = await this.findOrCreateIngredient(item.name, executor);
-      if (seen.has(ingredientId)) continue; // dedupe within one payload (PK recipe+ingredient)
+      // resolve BEFORE the dedupe so an id and a name that map to the same master
+      // row collapse to one (recipe_ingredient PK is recipe+ingredient)
+      const ingredientId = await this.resolveIngredientId(item, executor);
+      if (seen.has(ingredientId)) continue;
       seen.add(ingredientId);
       sortOrder += 1;
       await executor.insert(recipeIngredient).values({
         recipeId,
         ingredientId,
         amount: item.amount != null ? String(item.amount) : null,
-        unitId: item.unit_name ? await this.findOrCreateUnit(item.unit_name, executor) : null,
+        unitId: await this.resolveUnitId(item, executor),
         sortOrder,
       });
     }
@@ -405,15 +511,21 @@ export class RecipesRepository {
 
   async replaceEquipment(
     recipeId: number,
-    equipmentIds: number[],
+    items: EquipmentInput[],
     executor: Executor = db,
   ): Promise<void> {
     await executor.delete(recipeEquipment).where(eq(recipeEquipment.recipeId, recipeId));
-    const unique = [...new Set(equipmentIds)];
-    if (unique.length > 0) {
+    const seen = new Set<number>();
+    for (const item of items) {
+      // resolve BEFORE the dedupe so an id and a name mapping to the same master
+      // row collapse to one (recipe_equipment PK is recipe+equipment)
+      const equipmentId = await this.resolveEquipmentId(item, executor);
+      seen.add(equipmentId);
+    }
+    if (seen.size > 0) {
       await executor
         .insert(recipeEquipment)
-        .values(unique.map((equipmentId) => ({ recipeId, equipmentId })));
+        .values([...seen].map((equipmentId) => ({ recipeId, equipmentId })));
     }
   }
 

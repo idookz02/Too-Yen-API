@@ -38,15 +38,42 @@ export const FeedQueryDTO = t.Composite([
 
 export const RecipeIdParams = t.Object({ id: t.Numeric({ minimum: 1 }) });
 
+/**
+ * One recipe ingredient (decision 2026-07-15 — id-first for the dropdown UI).
+ * Ingredient: send `ingredient_id` (picked from the master dropdown) OR `name`
+ * (a new free-text name → find-or-created into the master, ADR-001). At least
+ * one is required (enforced in the service). If both are sent, `ingredient_id`
+ * wins and `name` is ignored. Unit follows the same rule via `unit_id`/
+ * `unit_name`, but is fully optional (omit both → no unit). A not-found id → 400;
+ * a soft-deleted id is reactivated and used (ADR-003).
+ */
 const IngredientInputDTO = t.Object({
-  name: t.String({ minLength: 1, maxLength: 150, examples: ["Shrimp"] }),
+  ingredient_id: t.Optional(t.Integer({ minimum: 1, examples: [5] })),
+  name: t.Optional(t.String({ minLength: 1, maxLength: 150, examples: ["Galangal"] })),
   amount: t.Optional(t.Number({ minimum: 0, examples: [300] })),
+  unit_id: t.Optional(t.Integer({ minimum: 1, examples: [2] })),
   unit_name: t.Optional(t.String({ minLength: 1, maxLength: 50, examples: ["gram"] })),
+});
+
+/**
+ * One recipe equipment (decision 2026-07-15 — id-first, same rule as ingredient).
+ * Send `equipment_id` (dropdown pick) OR `name` (new → find-or-created into the
+ * master, case-insensitive dedupe). At least one is required (enforced in the
+ * service); id wins if both. A not-found id → 400; a soft-deleted id is
+ * reactivated and used (ADR-003).
+ */
+const EquipmentInputDTO = t.Object({
+  equipment_id: t.Optional(t.Integer({ minimum: 1, examples: [4] })),
+  name: t.Optional(t.String({ minLength: 1, maxLength: 100, examples: ["Air fryer"] })),
 });
 
 const StepInputDTO = t.Object({
   step_number: t.Integer({ minimum: 1 }),
   instruction: t.String({ minLength: 1 }),
+  /** Multipart: name of the file part holding this step's image (decision
+   *  2026-07-15, replaces the positional `step_image_{n}` key). Reserved names
+   *  (data/cover/video/publish) are rejected in the service. */
+  image_field: t.Optional(t.String({ minLength: 1, examples: ["step_img_1"] })),
 });
 
 /** POST /recipes — draft; every field optional (AC M1-5). PATCH reuses this. */
@@ -58,18 +85,19 @@ export const UpsertRecipeDTO = t.Object({
   skill_level_id: t.Optional(t.Integer({ minimum: 1 })),
   cooking_method_id: t.Optional(t.Integer({ minimum: 1 })),
   category_id: t.Optional(t.Integer({ minimum: 1 })),
-  equipment_ids: t.Optional(t.Array(t.Integer({ minimum: 1 }))),
+  equipment: t.Optional(t.Array(EquipmentInputDTO)),
   ingredients: t.Optional(t.Array(IngredientInputDTO)),
   steps: t.Optional(t.Array(StepInputDTO)),
 });
 export type UpsertRecipeInput = typeof UpsertRecipeDTO.static;
 
 /**
- * POST / PATCH /recipes — multipart (decision 2026-07-10, replaces the JSON
- * body): `data` = JSON string matching UpsertRecipeDTO, plus optional files
- * `cover` and `step_image_{n}` (n = step_number in data.steps), plus
- * `publish=true` (create only) to validate + publish in the same request.
- * step_image_{n} keys are dynamic — validated in the service.
+ * POST / PATCH /recipes — multipart (decision 2026-07-10, step-image mapping
+ * revised 2026-07-15): `data` = JSON string matching UpsertRecipeDTO, plus
+ * optional files `cover`, `video`, and one file part per step named by that
+ * step's `image_field` in data.steps, plus `publish=true` (create only) to
+ * validate + publish in the same request. The step file parts have dynamic,
+ * client-chosen names — resolved + validated in the service.
  */
 export const MultipartRecipeBodyDTO = t.Object(
   {
@@ -77,19 +105,61 @@ export const MultipartRecipeBodyDTO = t.Object(
     // (found by the live smoke run 2026-07-10) — accept both: the parsed object,
     // or a raw string (e.g. malformed JSON, which the service rejects with a 400)
     data: t.Optional(
-      t.Union([
-        UpsertRecipeDTO,
-        t.String({ description: "JSON string with the recipe fields (old JSON body)" }),
-      ]),
+      t.Union(
+        [
+          UpsertRecipeDTO,
+          t.String({ description: "JSON string with the recipe fields (old JSON body)" }),
+        ],
+        {
+          description:
+            "JSON string of the recipe fields. Give each step an `image_field` = the name " +
+            "of the form file part carrying its image (see the `step_img_1` part in the " +
+            "example), then add that file part to the same request.",
+          examples: [
+            JSON.stringify(
+              {
+                recipe_name: "Tom Yum Goong",
+                description: "Spicy Thai shrimp soup",
+                cook_time_minutes: 30,
+                servings: 4,
+                skill_level_id: 1,
+                cooking_method_id: 2,
+                category_id: 3,
+                equipment: [
+                  { equipment_id: 4 }, // picked from the dropdown
+                  { name: "Air fryer" }, // typed a new one → created in the master
+                ],
+                ingredients: [
+                  // picked from the dropdown → send ids
+                  { ingredient_id: 5, amount: 300, unit_id: 2 },
+                  // typed a new one → send names; backend creates them in the master
+                  { name: "Galangal", amount: 2, unit_name: "slice" },
+                ],
+                steps: [
+                  { step_number: 1, instruction: "Boil the water", image_field: "step_img_1" },
+                  { step_number: 2, instruction: "Add the shrimp", image_field: "step_img_2" },
+                ],
+              },
+              null,
+              2,
+            ),
+          ],
+        },
+      ),
     ),
     cover: t.Optional(t.File({ type: "image" })),
     video: t.Optional(t.File({ type: "video" })),
+    // dynamic per-step image parts (named by each step's image_field) — declared
+    // here only so Swagger UI renders file inputs for the example; the real keys
+    // are client-chosen and kept via additionalProperties below
+    step_img_1: t.Optional(t.File({ type: "image" })),
+    step_img_2: t.Optional(t.File({ type: "image" })),
     publish: t.Optional(
       t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")]),
     ),
   },
-  // additionalProperties keeps the dynamic step_image_{n} File fields — without
-  // it Elysia strips unknown multipart keys and step images silently vanish
+  // additionalProperties keeps the dynamic, client-named step image File parts —
+  // without it Elysia strips unknown multipart keys and step images silently vanish
   { additionalProperties: true },
 );
 

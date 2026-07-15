@@ -41,7 +41,7 @@ Every error response uses the envelope from [README.md](README.md#conventions):
 
 | Status | Code | Endpoint | When |
 |---|---|---|---|
-| 400 | `VALIDATION_ERROR` | POST/PATCH `/recipes` | Wrong content-type (must be multipart), `data` isn't valid JSON against the recipe schema, `cover`/`step_image_{n}` isn't an image, duplicate `step_number`, or `publish` sent on PATCH |
+| 400 | `VALIDATION_ERROR` | POST/PATCH `/recipes` | Wrong content-type (must be multipart), `data` isn't valid JSON against the recipe schema, `cover` or a step's `image_field` part isn't an image (or `image_field` is missing/reserved), duplicate `step_number`, an ingredient/equipment sent with neither its `*_id` nor a `name`, a not-found `ingredient_id`/`unit_id`/`equipment_id`, or `publish` sent on PATCH |
 | 404 | `RECIPE_NOT_FOUND` | GET/PATCH/DELETE `/recipes/{id}`, publish, visibility | No recipe with that id |
 | 403 | `FORBIDDEN` | GET `/recipes/{id}` (draft/private by non-owner), PATCH/DELETE (non-owner) | Caller isn't the recipe owner |
 | 400 | `INCOMPLETE_RECIPE` | POST `/recipes/{id}/publish`, PATCH `/recipes/{id}` (would break a published recipe), DELETE media (removing the cover) | AC M2-1 checklist fails — `details` array lists the missing fields |

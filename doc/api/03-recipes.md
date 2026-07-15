@@ -57,7 +57,7 @@ Form fields:
 | `data` | JSON string | the recipe fields (same shape as the old JSON body below); omit for an empty draft |
 | `cover` | image file | optional — becomes the cover (compressed per the media rules) |
 | `video` | video file | optional — attaches the recipe's single video (one per recipe; on PATCH it replaces the existing one, deleting the old file) |
-| `step_image_{n}` | image file | optional — image for `step_number` n in `data.steps` (n must exist there → else `400`) |
+| `<image_field>` | image file | optional — each step's image is its own file part; name the part freely and reference that name in the step's `image_field` (e.g. `data.steps[0].image_field: "s1"` + a form part `s1`). The referenced part must exist and be an image, and the name must not be a reserved field (`data`/`cover`/`video`/`publish`) → else `400` |
 | `publish` | `true` | optional — validate the AC M2-1 checklist and publish immediately (`400 INCOMPLETE_RECIPE` with `details[]` when incomplete); omitted = draft (AC M1-5: partial fields allowed) |
 
 `data` shape:
@@ -65,19 +65,25 @@ Form fields:
 ```json
 { "recipe_name": "Tom Yum Goong", "description": "...", "cook_time_minutes": 30, "servings": 4,
   "skill_level_id": 1, "cooking_method_id": 2, "category_id": 3,
-  "equipment_ids": [1, 4],
-  "ingredients": [ { "name": "Shrimp", "amount": 300, "unit_name": "gram" } ],
-  "steps": [ { "step_number": 1, "instruction": "..." } ] }
+  "equipment": [ { "equipment_id": 4 }, { "name": "Air fryer" } ],
+  "ingredients": [
+    { "ingredient_id": 5, "amount": 300, "unit_id": 2 },
+    { "name": "Galangal", "amount": 2, "unit_name": "slice" }
+  ],
+  "steps": [ { "step_number": 1, "instruction": "...", "image_field": "s1" } ] }
 ```
 
-- `ingredients[].name` / `unit_name`: backend find-or-creates rows in `ingredient`/`unit` (case-insensitive dedupe, ADR-001/007)
+- `equipment[]` / `ingredients[]` — id-first for the dropdown UI (decision 2026-07-15). Each entry: send the `*_id` (picked from the master dropdown) **or** a `name` (a new free-text name → find-or-created into the master, case-insensitive dedupe). At least one is required; if both are sent the id wins. A not-found id → `400 VALIDATION_ERROR`; a soft-deleted id is reactivated and used (ADR-003).
+  - **equipment**: `equipment_id` or `name`.
+  - **ingredient**: `ingredient_id` or `name` (ADR-001).
+  - **unit** (inside an ingredient): same `unit_id` / `unit_name` rule (ADR-007), but fully optional — omit both for no unit.
 - **All-or-nothing:** if any image upload fails or the `publish` validation fails, the whole creation is rolled back (recipe + already-uploaded files) and the error is returned
 
 Response `201`: recipe detail (status = draft, or published when `publish=true`)
 
 ## PATCH /recipes/{id}
 
-Edit a draft or own post — `multipart/form-data`, same fields as POST **except `publish`** (rejected — use `/publish`). `data` sends only changed fields; `ingredients`/`steps`/`equipment_ids` replace the whole set. `cover` replaces the cover; `step_image_{n}` sets/replaces that step's image (n must exist in the final step set).
+Edit a draft or own post — `multipart/form-data`, same fields as POST **except `publish`** (rejected — use `/publish`). `data` sends only changed fields; `ingredients`/`steps`/`equipment` replace the whole set. `cover` replaces the cover; a step's `image_field` naming a form file part sets/replaces that step's image (the step must exist in the final step set).
 Note: `data` commits first — if an image upload fails afterwards, the field changes stand and the image can be retried via `PUT /recipes/{id}/steps/{n}/image`.
 Errors: `403 FORBIDDEN` (not the owner)
 

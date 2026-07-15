@@ -9,6 +9,8 @@ import { RecipesService } from "../src/modules/recipes/services/recipes.service"
 import { AppError } from "../src/shared/utils/errors";
 import type {
   CardRow,
+  EquipmentInput,
+  IngredientInput,
   MediaRow,
   RecipeRow,
   RecipesRepository,
@@ -139,11 +141,16 @@ function makeRepo(state: State) {
       const row = state.recipes.get(id);
       if (row) state.recipes.set(id, { ...row, ...patch });
     },
-    replaceEquipment: async (id: number, ids: number[]) => {
-      state.equipment.set(id, ids);
+    replaceEquipment: async (id: number, items: EquipmentInput[]) => {
+      // tests exercise the id-path; name-path resolution is a DB concern (smoke)
+      state.equipment.set(id, [...new Set(items.map((e) => e.equipment_id ?? 0))]);
     },
-    replaceIngredients: async (id: number, items: { name: string }[]) => {
-      state.ingredients.set(id, items);
+    replaceIngredients: async (id: number, items: IngredientInput[]) => {
+      // id-path items carry no name — key the mock detail row off whatever's set
+      state.ingredients.set(
+        id,
+        items.map((i) => ({ name: i.name ?? `#${i.ingredient_id}` })),
+      );
     },
     replaceSteps: async (id: number, steps: { step_number: number; instruction: string }[]) => {
       const existing = state.steps.get(id) ?? [];
@@ -356,6 +363,36 @@ describe("update", () => {
     seedComplete(state);
     const res = await service.update(1, { ingredients: [] }, owner);
     expect(res.ingredients).toEqual([]);
+  });
+
+  it("an ingredient with neither ingredient_id nor name -> 400", async () => {
+    seedComplete(state);
+    await expectAppError(
+      () => service.update(1, { ingredients: [{ amount: 5 }] }, owner),
+      400,
+      "VALIDATION_ERROR",
+    );
+  });
+
+  it("accepts an ingredient sent by ingredient_id (dropdown pick)", async () => {
+    seedComplete(state);
+    const res = await service.update(1, { ingredients: [{ ingredient_id: 7 }] }, owner);
+    expect(res.ingredients).toHaveLength(1);
+  });
+
+  it("an equipment with neither equipment_id nor name -> 400", async () => {
+    seedComplete(state);
+    await expectAppError(
+      () => service.update(1, { equipment: [{}] }, owner),
+      400,
+      "VALIDATION_ERROR",
+    );
+  });
+
+  it("accepts equipment sent by equipment_id (dropdown pick)", async () => {
+    seedComplete(state);
+    const res = await service.update(1, { equipment: [{ equipment_id: 3 }] }, owner);
+    expect(res.equipment).toHaveLength(1);
   });
 
   it("published post rejects an update that breaks completeness", async () => {
@@ -586,7 +623,7 @@ describe("getFeed", () => {
 
 describe("createFromMultipart", () => {
   const png = () => new File(["x"], "img.png", { type: "image/png" });
-  const completeData = () =>
+  const completeData = (stepImageField?: string) =>
     JSON.stringify({
       recipe_name: "One Shot Curry",
       description: "d",
@@ -594,16 +631,18 @@ describe("createFromMultipart", () => {
       skill_level_id: 1,
       cooking_method_id: 1,
       category_id: 1,
-      equipment_ids: [1],
+      equipment: [{ equipment_id: 1 }],
       ingredients: [{ name: "Chili" }],
-      steps: [{ step_number: 1, instruction: "Cook" }],
+      steps: [
+        { step_number: 1, instruction: "Cook", ...(stepImageField && { image_field: stepImageField }) },
+      ],
     });
 
   const mp4 = () => new File(["x"], "clip.mp4", { type: "video/mp4" });
 
   it("creates draft + cover + step image in one call", async () => {
     const res = await service.createFromMultipart(
-      { data: completeData(), cover: png(), step_image_1: png() },
+      { data: completeData("s1"), cover: png(), s1: png() },
       owner,
     );
     expect(res.status).toBe("draft");
@@ -670,11 +709,24 @@ describe("createFromMultipart", () => {
     expect(state.recipes.size).toBe(0);
   });
 
-  it("step_image_{n} without a matching step -> 400 before anything is written", async () => {
+  it("image_field with no matching file part -> 400 before anything is written", async () => {
     await expectAppError(
       () =>
         service.createFromMultipart(
-          { data: completeData(), step_image_9: png() },
+          { data: completeData("missing") }, // no `missing` part uploaded
+          owner,
+        ),
+      400,
+      "VALIDATION_ERROR",
+    );
+    expect(state.recipes.size).toBe(0);
+  });
+
+  it("image_field naming a reserved field (cover) -> 400 before anything is written", async () => {
+    await expectAppError(
+      () =>
+        service.createFromMultipart(
+          { data: completeData("cover"), cover: png() },
           owner,
         ),
       400,
@@ -711,8 +763,8 @@ describe("createFromMultipart", () => {
       () =>
         service.createFromMultipart(
           {
-            data: completeData(),
-            step_image_1: new File(["x"], "a.mp4", { type: "video/mp4" }),
+            data: completeData("s1"),
+            s1: new File(["x"], "a.mp4", { type: "video/mp4" }),
           },
           owner,
         ),
@@ -783,7 +835,7 @@ describe("create", () => {
     const res = await service.create(
       {
         recipe_name: "Pad Thai",
-        equipment_ids: [1, 2],
+        equipment: [{ equipment_id: 1 }, { name: "Wok" }],
         ingredients: [{ name: "Noodles" }],
         steps: [{ step_number: 1, instruction: "Fry" }],
       },

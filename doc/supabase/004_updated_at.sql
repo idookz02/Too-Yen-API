@@ -3,7 +3,8 @@
 -- junctions, recent_search) are intentionally left out: their rows are never
 -- UPDATEd, so an updated_at would forever equal created_at.
 -- recipe.updated_at + comment.updated_at already existed (app-maintained) and
--- are not touched here.
+-- are not touched here. (both later gained the same trigger as a safety net —
+-- recipe in 005, comment in 006.)
 
 -- shared trigger fn: stamp updated_at on every UPDATE (no drift, no app code)
 create or replace function set_updated_at() returns trigger as $$

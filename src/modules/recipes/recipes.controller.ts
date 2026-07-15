@@ -21,7 +21,7 @@ import {
 const requireMultipart = (request: Request) => {
   if (!request.headers.get("content-type")?.includes("multipart/form-data")) {
     throw badRequest(
-      "This endpoint requires multipart/form-data — fields: data (JSON string), cover, step_image_{n}, publish",
+      "This endpoint requires multipart/form-data — fields: data (JSON string), cover, video, one file part per step named by that step's image_field, publish",
       "VALIDATION_ERROR",
     );
   }
@@ -77,9 +77,10 @@ export const recipesController = new Elysia({ prefix: "/recipes" })
         description:
           "multipart/form-data — data: JSON string with the recipe fields (AC M1-5: partial " +
           "allowed; ingredients find-or-created per ADR-001/007), cover: image file, " +
-          "step_image_{n}: image for step_number n, publish=true: validate + publish " +
-          "immediately. ALL-OR-NOTHING: a failed upload or failed publish validation rolls " +
-          "the whole creation back.",
+          "each step's image: add a file part and name it in that step's image_field " +
+          "(e.g. data.steps[0].image_field=\"s1\" + form file s1), publish=true: validate + " +
+          "publish immediately. ALL-OR-NOTHING: a failed upload or failed publish validation " +
+          "rolls the whole creation back.",
       },
     },
   )
@@ -105,7 +106,8 @@ export const recipesController = new Elysia({ prefix: "/recipes" })
         description:
           "Owner only; arrays in data replace the whole set. On a published recipe the update " +
           "must not break completeness (400 INCOMPLETE_RECIPE). cover replaces the cover; " +
-          "step_image_{n} sets/replaces that step's image. publish is rejected here.",
+          "a step's image_field naming a file part sets/replaces that step's image. publish " +
+          "is rejected here.",
       },
     },
   )

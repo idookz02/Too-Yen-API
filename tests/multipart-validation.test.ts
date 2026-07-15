@@ -62,16 +62,19 @@ describe("MultipartRecipeBodyDTO through Elysia's real parser", () => {
     expect(((await res.json()) as { dataType: string }).dataType).toBe("string");
   });
 
-  it("accepts the full field set: data + cover + step_image_{n} + publish", async () => {
+  it("accepts the full field set: data + cover + per-step image part + publish", async () => {
     const form = new FormData();
-    form.append("data", JSON.stringify({ steps: [{ step_number: 1, instruction: "x" }] }));
+    form.append(
+      "data",
+      JSON.stringify({ steps: [{ step_number: 1, instruction: "x", image_field: "s1" }] }),
+    );
     form.append("cover", await realPng("c.png"));
-    form.append("step_image_1", await realPng("s.png"));
+    form.append("s1", await realPng("s.png"));
     form.append("publish", "true");
     const res = await send(form);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { keys: string[] };
-    expect(body.keys.sort()).toEqual(["cover", "data", "publish", "step_image_1"]);
+    expect(body.keys.sort()).toEqual(["cover", "data", "publish", "s1"]);
   });
 
   // fake-image → 400 is asserted against the REAL route below (needs the
