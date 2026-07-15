@@ -7,6 +7,7 @@ import {
   AutocompleteQueryDTO,
   ByImageBodyDTO,
   ByImageResponseDTO,
+  EquipmentAutocompleteDTO,
   IngredientAutocompleteDTO,
   MatchQueryDTO,
   MatchResponseDTO,
@@ -121,7 +122,10 @@ export const searchController = new Elysia()
     detail: {
       tags: ["Search"],
       summary: "Ingredient autocomplete",
-      description: "Prefix match, default limit 10 (max 20).",
+      description:
+        "Case-insensitive **prefix** match on active ingredient names (`is_active = true`, " +
+        "soft-deleted hidden), ordered by name. `limit` default 10, max 20. Blank/omitted `q` " +
+        "returns the first `limit` names. Bearer required. Example: `?q=shr` → `[{ ingredient_id: 5, name: \"Shrimp\" }]`.",
     },
   })
 
@@ -132,6 +136,23 @@ export const searchController = new Elysia()
     detail: {
       tags: ["Search"],
       summary: "Unit autocomplete",
-      description: "Prefix match, default limit 10 (max 20).",
+      description:
+        "Case-insensitive **prefix** match on active unit names (`is_active = true`, " +
+        "soft-deleted hidden), ordered by name. `limit` default 10, max 20. Blank/omitted `q` " +
+        "returns the first `limit` names. Bearer required. Example: `?q=tb` → `[{ unit_id: 2, name: \"tbsp\" }]`.",
+    },
+  })
+
+  // GET /equipment?q= — autocomplete (extends spec; mirrors /ingredients + /units)
+  .get("/equipment", ({ query }) => searchService.autocompleteEquipment(query), {
+    query: AutocompleteQueryDTO,
+    response: { 200: EquipmentAutocompleteDTO },
+    detail: {
+      tags: ["Search"],
+      summary: "Equipment autocomplete",
+      description:
+        "Case-insensitive **prefix** match on active equipment names (`is_active = true`, " +
+        "soft-deleted hidden), ordered by name. `limit` default 10, max 20. Blank/omitted `q` " +
+        "returns the first `limit` names. Bearer required. Example: `?q=wo` → `[{ equipment_id: 7, name: \"Wok\" }]`.",
     },
   });

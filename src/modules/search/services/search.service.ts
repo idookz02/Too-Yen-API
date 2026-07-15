@@ -290,6 +290,15 @@ export class SearchService {
     return { data: rows.map((r) => ({ unit_id: r.unitId, name: r.name })) };
   }
 
+  // GET /equipment?q=
+  async autocompleteEquipment(query: { q?: string; limit?: number }) {
+    const rows = await this.repo.autocompleteEquipment(
+      query.q?.trim() ?? "",
+      this.clampLimit(query.limit),
+    );
+    return { data: rows.map((r) => ({ equipment_id: r.equipmentId, name: r.name })) };
+  }
+
   private clampLimit(limit?: number): number {
     return Math.min(AUTOCOMPLETE_MAX, Math.max(1, limit ?? AUTOCOMPLETE_DEFAULT));
   }

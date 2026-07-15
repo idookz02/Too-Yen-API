@@ -101,8 +101,20 @@ export const ByImageResponseDTO = t.Object({
 export const RecentKeywordParams = t.Object({ keyword: t.String({ minLength: 1 }) });
 
 export const AutocompleteQueryDTO = t.Object({
-  q: t.Optional(t.String()),
-  limit: t.Optional(t.Numeric({ minimum: 1 })),
+  q: t.Optional(
+    t.String({
+      description:
+        "Prefix to match against name (case-insensitive, trimmed). Blank/omitted returns the first `limit` entries ordered by name.",
+      examples: ["shr"],
+    }),
+  ),
+  limit: t.Optional(
+    t.Numeric({
+      minimum: 1,
+      description: "Max rows. Default 10, clamped to 20.",
+      examples: [10],
+    }),
+  ),
 });
 
 // ============================================================================
@@ -145,10 +157,38 @@ export const RecentSearchResponseDTO = t.Object({
   ),
 });
 
-export const IngredientAutocompleteDTO = t.Object({
-  data: t.Array(t.Object({ ingredient_id: t.Number(), name: t.String() })),
-});
+export const IngredientAutocompleteDTO = t.Object(
+  {
+    data: t.Array(
+      t.Object({
+        ingredient_id: t.Number({ examples: [5] }),
+        name: t.String({ examples: ["Shrimp"] }),
+      }),
+    ),
+  },
+  { description: "Active ingredient matches, ordered by name" },
+);
 
-export const UnitAutocompleteDTO = t.Object({
-  data: t.Array(t.Object({ unit_id: t.Number(), name: t.String() })),
-});
+export const UnitAutocompleteDTO = t.Object(
+  {
+    data: t.Array(
+      t.Object({
+        unit_id: t.Number({ examples: [2] }),
+        name: t.String({ examples: ["tbsp"] }),
+      }),
+    ),
+  },
+  { description: "Active unit matches, ordered by name" },
+);
+
+export const EquipmentAutocompleteDTO = t.Object(
+  {
+    data: t.Array(
+      t.Object({
+        equipment_id: t.Number({ examples: [7] }),
+        name: t.String({ examples: ["Wok"] }),
+      }),
+    ),
+  },
+  { description: "Active equipment matches, ordered by name" },
+);

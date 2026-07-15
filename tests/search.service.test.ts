@@ -89,6 +89,10 @@ beforeEach(() => {
       state.autocompleteCalls.push({ q, limit });
       return [{ unitId: 2, name: "tbsp" }];
     },
+    autocompleteEquipment: async (q: string, limit: number) => {
+      state.autocompleteCalls.push({ q, limit });
+      return [{ equipmentId: 7, name: "Wok" }];
+    },
   };
   service = new SearchService({
     repo: repo as unknown as SearchRepository,
@@ -405,5 +409,11 @@ describe("autocomplete", () => {
   it("clamps limit to 20", async () => {
     await service.autocompleteUnits({ q: "tb", limit: 500 });
     expect(state.autocompleteCalls[0]).toEqual({ q: "tb", limit: 20 });
+  });
+
+  it("equipment trims q and maps equipment_id", async () => {
+    const res = await service.autocompleteEquipment({ q: "  wo " });
+    expect(state.autocompleteCalls[0]).toEqual({ q: "wo", limit: 10 });
+    expect(res.data).toEqual([{ equipment_id: 7, name: "Wok" }]);
   });
 });

@@ -77,3 +77,4 @@ Ops notes: requires `OPENAI_API_KEY` (absent → `503 FEATURE_DISABLED`); upstre
 
 - **GET /ingredients?q=shr&limit=10** → `200 { "data": [ { "ingredient_id": 5, "name": "Shrimp" } ] }`
 - **GET /units?q=tb&limit=10** → `200 { "data": [ { "unit_id": 2, "name": "tbsp" } ] }`
+- **GET /equipment?q=wo&limit=10** → `200 { "data": [ { "equipment_id": 7, "name": "Wok" } ] }`

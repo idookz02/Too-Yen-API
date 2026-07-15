@@ -320,6 +320,15 @@ export class SearchRepository {
       .orderBy(asc(unit.name))
       .limit(limit);
   }
+
+  async autocompleteEquipment(q: string, limit: number, executor: Executor = db) {
+    return executor
+      .select({ equipmentId: masterEquipment.equipmentId, name: masterEquipment.name })
+      .from(masterEquipment)
+      .where(and(ilike(masterEquipment.name, `${q}%`), eq(masterEquipment.isActive, true)))
+      .orderBy(asc(masterEquipment.name))
+      .limit(limit);
+  }
 }
 
 export const searchRepository = new SearchRepository();
