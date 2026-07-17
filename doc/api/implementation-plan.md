@@ -67,8 +67,8 @@ tests/                  # bun:test per module
 1. **Card query** (shared): recipe + author(+tier) + cover image + like/favorite/comment counts + `liked_by_me`/`favorited_by_me` — one SQL with lateral/aggregate subqueries; index-backed sorts for newest / most_liked / most_favorited
 2. **Feed** `GET /recipes`: status = published only
 3. **Detail** `GET /recipes/{id}`: full joins (ingredients+units ordered by sort_order, steps, equipment, media); guard: draft/private → owner only
-4. **Create/Update**: single transaction — upsert recipe row; find-or-create `ingredient`/`unit` by `lower(name)` (ADR-001/007); replace-set semantics for ingredients/steps/equipment
-5. **Publish**: completeness validation (name, description, skill, method, cook_time, category, equipment ≥1, ingredient ≥1, step ≥1, cover) → `400 INCOMPLETE_RECIPE` with `details[]`
+4. **Create/Update**: single transaction — upsert recipe row; find-or-create `ingredient`/`unit` by `lower(name)` (ADR-001/007); replace-set semantics for ingredients/steps/equipment/cooking_methods (multi cooking methods via `recipe_cooking_method` junction, ids only)
+5. **Publish**: completeness validation (name, skill, method ≥1, cook_time, category, equipment ≥1, ingredient ≥1, step ≥1, cover; description optional) → `400 INCOMPLETE_RECIPE` with `details[]`
 6. **Visibility** `PATCH /recipes/{id}/visibility`: published ↔ private only
 7. **Delete**: collect storage paths (media + step images + comment images) → delete row (cascade) → remove files (ADR-009 cleanup); tier recalc fires via DB trigger
 8. **Media endpoints**: enforce 1 video (`409 VIDEO_LIMIT`) and single cover in a transaction

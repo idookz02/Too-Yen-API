@@ -11,7 +11,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { masterSkillLevel } from "./master-skill-level";
-import { masterCookingMethod } from "./master-cooking-method";
 import { masterCategory } from "./master-category";
 
 // ===== Recipe (ADR-005 single table + status) =====
@@ -33,10 +32,7 @@ export const recipe = pgTable(
     ),
     cookTimeMinutes: integer("cook_time_minutes"), // ADR-011: user-entered minutes
     servings: integer("servings"), // how many servings the recipe yields (nullable, like cook_time)
-    cookingMethodId: bigint("cooking_method_id", { mode: "number" }).references(
-      () => masterCookingMethod.cookingMethodId,
-      { onDelete: "restrict" },
-    ),
+    // cooking methods moved to the recipe_cooking_method junction (multi-value)
     categoryId: bigint("category_id", { mode: "number" }).references(
       () => masterCategory.categoryId,
       { onDelete: "restrict" },

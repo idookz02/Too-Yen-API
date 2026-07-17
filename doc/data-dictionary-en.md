@@ -65,11 +65,10 @@ Constraints: UNIQUE(name), UNIQUE(min_likes) | `users.tier_id` is maintained by 
 | recipe_id | BIGINT | NO | PK | Recipe ID |
 | user_id | BIGINT | NO | FK → users | Owner |
 | recipe_name | VARCHAR(255) | YES | | Recipe name, nullable while draft |
-| description | TEXT | YES | | Recipe description, required at publish (app-enforced) |
+| description | TEXT | YES | | Recipe description, optional (not gated at publish) |
 | skill_level_id | BIGINT | YES | FK → master_skill_level | Skill level |
 | cook_time_minutes | INT | YES | | Cooking time in minutes, user-entered, range-filterable in search (ADR-011) |
 | servings | INT | YES | | How many servings the recipe yields, user-entered |
-| cooking_method_id | BIGINT | YES | FK → master_cooking_method | Cooking method |
 | category_id | BIGINT | YES | FK → master_category | Category |
 | status | ENUM('draft','published','private') | NO | | Post status (ADR-005) |
 | published_at | DATETIME | YES | | Publish time, feed sort key |
@@ -137,6 +136,20 @@ FK behavior: recipe_id CASCADE; ingredient_id RESTRICT; unit_id RESTRICT
 
 Constraints: PK(recipe_id, equipment_id)
 FK behavior: recipe_id CASCADE; equipment_id RESTRICT
+
+---
+
+## 7b. recipe_cooking_method — Cooking methods per recipe (junction, 2026-07-17)
+
+Replaces the old single `recipe.cooking_method_id` FK: a recipe can carry more than one cooking method. Migration `doc/supabase/007_recipe_cooking_method.sql`.
+
+| Column | Type | Null | Key | Description |
+|--------|------|------|-----|-------------|
+| recipe_id | BIGINT | NO | PK, FK → recipe | Recipe |
+| cooking_method_id | BIGINT | NO | PK, FK → master_cooking_method | Cooking method; many per recipe |
+
+Constraints: PK(recipe_id, cooking_method_id)
+FK behavior: recipe_id CASCADE; cooking_method_id RESTRICT
 
 ---
 

@@ -20,6 +20,7 @@ import {
   masterSkillLevel,
   masterTier,
   recipe,
+  recipeCookingMethod,
   recipeEquipment,
   recipeIngredient,
   recipeLike,
@@ -234,7 +235,6 @@ async function seedRecipes(ownerId: number) {
         description: r.description,
         cookTimeMinutes: r.cookTime,
         skillLevelId: await masterId(masterSkillLevel, "skill_level_id", r.skill),
-        cookingMethodId: await masterId(masterCookingMethod, "cooking_method_id", r.method),
         categoryId: await masterId(masterCategory, "category_id", r.category),
         status: "published",
         publishedAt: new Date(),
@@ -242,6 +242,11 @@ async function seedRecipes(ownerId: number) {
       .returning({ recipeId: recipe.recipeId });
     const recipeId = created!.recipeId;
     ids.push(recipeId);
+
+    await db.insert(recipeCookingMethod).values({
+      recipeId,
+      cookingMethodId: await masterId(masterCookingMethod, "cooking_method_id", r.method),
+    });
 
     for (const eq_ of r.equipment) {
       await db.insert(recipeEquipment).values({

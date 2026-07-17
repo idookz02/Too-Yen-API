@@ -57,7 +57,7 @@ const CONFIG: Record<MasterTypeParam, TypeConfig> = {
     id: masterCookingMethod.cookingMethodId,
     minLikes: null,
     inUseCount: count(
-      sql`select count(*) from recipe r where r.cooking_method_id = ${masterCookingMethod.cookingMethodId}`,
+      sql`select count(*) from recipe_cooking_method rcm where rcm.cooking_method_id = ${masterCookingMethod.cookingMethodId}`,
     ),
   },
   categories: {

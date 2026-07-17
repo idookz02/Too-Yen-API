@@ -32,9 +32,9 @@ import {
 const missingFields = (c: Completeness): string[] => {
   const missing: string[] = [];
   if (!c.row.recipeName) missing.push("recipe_name");
-  if (!c.row.description) missing.push("description");
+  // description is optional (no longer gated at publish)
   if (c.row.skillLevelId == null) missing.push("skill_level");
-  if (c.row.cookingMethodId == null) missing.push("cooking_method");
+  if (c.cookingMethodCount < 1) missing.push("cooking_method");
   if (c.row.cookTimeMinutes == null) missing.push("cook_time_minutes");
   if (c.row.categoryId == null) missing.push("category");
   if (c.equipmentCount < 1) missing.push("equipment");
@@ -225,12 +225,14 @@ export class RecipesService {
           skillLevelId: input.skill_level_id ?? null,
           cookTimeMinutes: input.cook_time_minutes ?? null,
           servings: input.servings ?? null,
-          cookingMethodId: input.cooking_method_id ?? null,
           categoryId: input.category_id ?? null,
           status: "draft",
         },
         tx,
       );
+      if (input.cooking_method_ids) {
+        await this.repo.replaceCookingMethods(created.recipeId, input.cooking_method_ids, tx);
+      }
       if (input.equipment) {
         await this.repo.replaceEquipment(created.recipeId, input.equipment, tx);
       }
@@ -259,10 +261,10 @@ export class RecipesService {
           description: input.description ?? current.row.description,
           skillLevelId: input.skill_level_id ?? current.row.skillLevelId,
           cookTimeMinutes: input.cook_time_minutes ?? current.row.cookTimeMinutes,
-          cookingMethodId: input.cooking_method_id ?? current.row.cookingMethodId,
           categoryId: input.category_id ?? current.row.categoryId,
         },
         equipmentCount: input.equipment?.length ?? current.equipmentCount,
+        cookingMethodCount: input.cooking_method_ids?.length ?? current.cookingMethodCount,
         ingredientCount: input.ingredients?.length ?? current.ingredientCount,
         stepCount: input.steps?.length ?? current.stepCount,
         hasCover: current.hasCover,
@@ -286,11 +288,13 @@ export class RecipesService {
           ...(input.skill_level_id !== undefined && { skillLevelId: input.skill_level_id }),
           ...(input.cook_time_minutes !== undefined && { cookTimeMinutes: input.cook_time_minutes }),
           ...(input.servings !== undefined && { servings: input.servings }),
-          ...(input.cooking_method_id !== undefined && { cookingMethodId: input.cooking_method_id }),
           ...(input.category_id !== undefined && { categoryId: input.category_id }),
         },
         tx,
       );
+      if (input.cooking_method_ids) {
+        await this.repo.replaceCookingMethods(recipeId, input.cooking_method_ids, tx);
+      }
       if (input.equipment) {
         await this.repo.replaceEquipment(recipeId, input.equipment, tx);
       }
@@ -498,10 +502,7 @@ export class RecipesService {
       servings: row.servings,
       skill_level:
         m?.skillLevelId != null ? { id: m.skillLevelId, name: m.skillLevelName! } : null,
-      cooking_method:
-        m?.cookingMethodId != null
-          ? { id: m.cookingMethodId, name: m.cookingMethodName! }
-          : null,
+      cooking_methods: parts.cookingMethods,
       category: m?.categoryId != null ? { id: m.categoryId, name: m.categoryName! } : null,
       equipment: parts.equipment,
       ingredients: parts.ingredients.map((i) => ({

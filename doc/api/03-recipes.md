@@ -37,7 +37,7 @@ Response `200`: card fields above, plus:
 ```json
 { "description": "...", "cook_time_minutes": 30, "servings": 4,
   "skill_level": { "id": 1, "name": "Beginner" },
-  "cooking_method": { "id": 2, "name": "Boil" },
+  "cooking_methods": [ { "id": 2, "name": "Boil" }, { "id": 5, "name": "Grill" } ],
   "category": { "id": 3, "name": "Thai" },
   "equipment": [ { "id": 1, "name": "Pot" } ],
   "ingredients": [ { "ingredient_id": 5, "name": "Shrimp", "amount": 300, "unit": { "id": 2, "name": "gram" }, "sort_order": 1 } ],
@@ -64,7 +64,7 @@ Form fields:
 
 ```json
 { "recipe_name": "Tom Yum Goong", "description": "...", "cook_time_minutes": 30, "servings": 4,
-  "skill_level_id": 1, "cooking_method_id": 2, "category_id": 3,
+  "skill_level_id": 1, "cooking_method_ids": [2, 5], "category_id": 3,
   "equipment": [ { "equipment_id": 4 }, { "name": "Air fryer" } ],
   "ingredients": [
     { "ingredient_id": 5, "amount": 300, "unit_id": 2 },
@@ -77,6 +77,8 @@ Form fields:
   - **equipment**: `equipment_id` or `name`.
   - **ingredient**: `ingredient_id` or `name` (ADR-001).
   - **unit** (inside an ingredient): same `unit_id` / `unit_name` rule (ADR-007), but fully optional — omit both for no unit.
+- `cooking_method_ids[]` — one or more master cooking-method ids (2026-07-17; was the single `cooking_method_id`). Replace-set semantics like equipment; ids only (no free-text create). A not-found id → `400 VALIDATION_ERROR`; a soft-deleted id is reactivated (ADR-003). At least one is required at publish.
+- `description` is optional and no longer gated at publish (2026-07-17).
 - **All-or-nothing:** if any image upload fails or the `publish` validation fails, the whole creation is rolled back (recipe + already-uploaded files) and the error is returned
 
 Response `201`: recipe detail (status = draft, or published when `publish=true`)
@@ -89,7 +91,7 @@ Errors: `403 FORBIDDEN` (not the owner)
 
 ## POST /recipes/{id}/publish
 
-Validates completeness per AC M2-1: recipe_name, description, skill_level, cooking_method, cook_time_minutes, category, equipment ≥ 1, ingredient ≥ 1, step ≥ 1, cover image
+Validates completeness per AC M2-1: recipe_name, skill_level, cooking_method ≥ 1, cook_time_minutes, category, equipment ≥ 1, ingredient ≥ 1, step ≥ 1, cover image (description is optional, not checked)
 Response `200`: recipe detail (status = published, published_at set)
 Errors: `400 INCOMPLETE_RECIPE` — `details` lists missing fields (AC M2-2)
 

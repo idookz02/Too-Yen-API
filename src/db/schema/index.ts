@@ -18,6 +18,7 @@ export * from "./ingredient";
 export * from "./unit";
 export * from "./recipe-ingredient";
 export * from "./recipe-equipment";
+export * from "./recipe-cooking-method";
 export * from "./cooking-step";
 export * from "./recipe-media";
 export * from "./comment";

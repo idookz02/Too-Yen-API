@@ -83,7 +83,8 @@ export const UpsertRecipeDTO = t.Object({
   cook_time_minutes: t.Optional(t.Integer({ minimum: 1 })),
   servings: t.Optional(t.Integer({ minimum: 1, examples: [4] })),
   skill_level_id: t.Optional(t.Integer({ minimum: 1 })),
-  cooking_method_id: t.Optional(t.Integer({ minimum: 1 })),
+  // one or more cooking methods (replace-set semantics, like equipment)
+  cooking_method_ids: t.Optional(t.Array(t.Integer({ minimum: 1 }), { examples: [[2, 5]] })),
   category_id: t.Optional(t.Integer({ minimum: 1 })),
   equipment: t.Optional(t.Array(EquipmentInputDTO)),
   ingredients: t.Optional(t.Array(IngredientInputDTO)),
@@ -123,7 +124,7 @@ export const MultipartRecipeBodyDTO = t.Object(
                 cook_time_minutes: 30,
                 servings: 4,
                 skill_level_id: 1,
-                cooking_method_id: 2,
+                cooking_method_ids: [2, 5],
                 category_id: 3,
                 equipment: [
                   { equipment_id: 4 }, // picked from the dropdown
@@ -226,7 +227,7 @@ export const RecipeDetailDTO = t.Composite([
     cook_time_minutes: NullableNumber,
     servings: NullableNumber,
     skill_level: NullableIdName,
-    cooking_method: NullableIdName,
+    cooking_methods: t.Array(IdName),
     category: NullableIdName,
     equipment: t.Array(IdName),
     ingredients: t.Array(

@@ -10,6 +10,7 @@ import {
   masterSkillLevel,
   masterTier,
   recipe,
+  recipeCookingMethod,
   recipeEquipment,
   recipeFavorite,
   recipeIngredient,
@@ -57,6 +58,7 @@ export type StepInput = { step_number: number; instruction: string };
 export type Completeness = {
   row: RecipeRow;
   equipmentCount: number;
+  cookingMethodCount: number;
   ingredientCount: number;
   stepCount: number;
   hasCover: boolean;
@@ -226,17 +228,24 @@ export class RecipesRepository {
       .select({
         skillLevelId: masterSkillLevel.skillLevelId,
         skillLevelName: masterSkillLevel.name,
-        cookingMethodId: masterCookingMethod.cookingMethodId,
-        cookingMethodName: masterCookingMethod.name,
         categoryId: masterCategory.categoryId,
         categoryName: masterCategory.name,
       })
       .from(recipe)
       .leftJoin(masterSkillLevel, eq(recipe.skillLevelId, masterSkillLevel.skillLevelId))
-      .leftJoin(masterCookingMethod, eq(recipe.cookingMethodId, masterCookingMethod.cookingMethodId))
       .leftJoin(masterCategory, eq(recipe.categoryId, masterCategory.categoryId))
       .where(eq(recipe.recipeId, recipeId))
       .limit(1);
+
+    const cookingMethods = await executor
+      .select({ id: masterCookingMethod.cookingMethodId, name: masterCookingMethod.name })
+      .from(recipeCookingMethod)
+      .innerJoin(
+        masterCookingMethod,
+        eq(recipeCookingMethod.cookingMethodId, masterCookingMethod.cookingMethodId),
+      )
+      .where(eq(recipeCookingMethod.recipeId, recipeId))
+      .orderBy(asc(masterCookingMethod.name));
 
     const equipment = await executor
       .select({ id: masterEquipment.equipmentId, name: masterEquipment.name })
@@ -276,7 +285,7 @@ export class RecipesRepository {
       .where(eq(recipeMedia.recipeId, recipeId))
       .orderBy(asc(recipeMedia.sortOrder), asc(recipeMedia.mediaId));
 
-    return { masters: masters ?? null, equipment, ingredients, steps, media };
+    return { masters: masters ?? null, cookingMethods, equipment, ingredients, steps, media };
   }
 
   // ===== create / update =====
@@ -529,6 +538,48 @@ export class RecipesRepository {
     }
   }
 
+  /** Replace the whole cooking-method set (ids only; deduped). */
+  async replaceCookingMethods(
+    recipeId: number,
+    cookingMethodIds: number[],
+    executor: Executor = db,
+  ): Promise<void> {
+    await executor
+      .delete(recipeCookingMethod)
+      .where(eq(recipeCookingMethod.recipeId, recipeId));
+    const seen = new Set<number>();
+    for (const id of cookingMethodIds) {
+      const cookingMethodId = await this.requireActiveCookingMethodId(id, executor);
+      seen.add(cookingMethodId);
+    }
+    if (seen.size > 0) {
+      await executor
+        .insert(recipeCookingMethod)
+        .values([...seen].map((cookingMethodId) => ({ recipeId, cookingMethodId })));
+    }
+  }
+
+  /** A cooking method is master-only (no free-text create): id must exist +
+   *  active. A not-found id is a 400; a soft-deleted one is reactivated (ADR-003). */
+  private async requireActiveCookingMethodId(
+    id: number,
+    executor: Executor,
+  ): Promise<number> {
+    const [row] = await executor
+      .select({ id: masterCookingMethod.cookingMethodId, isActive: masterCookingMethod.isActive })
+      .from(masterCookingMethod)
+      .where(eq(masterCookingMethod.cookingMethodId, id))
+      .limit(1);
+    if (!row) throw badRequest(`cooking_method_id ${id} not found`, "VALIDATION_ERROR");
+    if (!row.isActive) {
+      await executor
+        .update(masterCookingMethod)
+        .set({ isActive: true })
+        .where(eq(masterCookingMethod.cookingMethodId, row.id));
+    }
+    return row.id;
+  }
+
   // ===== completeness (publish + integrity guards) =====
 
   async getCompleteness(recipeId: number, executor: Executor = db): Promise<Completeness | null> {
@@ -537,6 +588,7 @@ export class RecipesRepository {
     const [counts] = await executor
       .select({
         equipmentCount: sql<number>`(select count(*) from ${recipeEquipment} re where re.recipe_id = ${recipeId})`.mapWith(Number),
+        cookingMethodCount: sql<number>`(select count(*) from ${recipeCookingMethod} rcm where rcm.recipe_id = ${recipeId})`.mapWith(Number),
         ingredientCount: sql<number>`(select count(*) from ${recipeIngredient} ri where ri.recipe_id = ${recipeId})`.mapWith(Number),
         stepCount: sql<number>`(select count(*) from ${cookingStep} cs where cs.recipe_id = ${recipeId})`.mapWith(Number),
         hasCover: sql<boolean>`exists(select 1 from ${recipeMedia} rm where rm.recipe_id = ${recipeId} and rm.is_cover)`,

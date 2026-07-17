@@ -140,7 +140,7 @@ let equipmentId = 0;
     description: "Smoke-test recipe",
     cook_time_minutes: 15,
     skill_level_id: masterIds["skill-levels"],
-    cooking_method_id: masterIds["cooking-methods"],
+    cooking_method_ids: [masterIds["cooking-methods"]],
     category_id: masterIds["categories"],
     // equipment by id (dropdown) + a new one by name (find-or-created into master)
     equipment: [{ equipment_id: masterIds["equipment"] }, { name: `Smoke Gadget ${TS}` }],
@@ -245,7 +245,7 @@ section("recipes — single-shot create (multipart + publish)");
       description: "Created + published in one request",
       cook_time_minutes: 5,
       skill_level_id: masterIds["skill-levels"],
-      cooking_method_id: masterIds["cooking-methods"],
+      cooking_method_ids: [masterIds["cooking-methods"]],
       category_id: masterIds["categories"],
       equipment: [{ equipment_id: masterIds["equipment"] }],
       ingredients: [{ name: `Smoke Ingredient ${TS}` }],

@@ -23,10 +23,9 @@ erDiagram
         BIGINT recipe_id PK
         BIGINT user_id FK "owner"
         VARCHAR recipe_name "nullable while draft"
-        TEXT description "nullable while draft, required at publish"
+        TEXT description "nullable, optional (not gated at publish)"
         BIGINT skill_level_id FK "nullable while draft"
         INT cook_time_minutes "nullable, range filter in search (ADR-011)"
-        BIGINT cooking_method_id FK "nullable while draft"
         BIGINT category_id FK "nullable while draft"
         ENUM status "draft | published | private"
         DATETIME published_at "nullable"
@@ -65,6 +64,11 @@ erDiagram
     recipe_equipment {
         BIGINT recipe_id PK, FK "ON DELETE CASCADE"
         BIGINT equipment_id PK, FK
+    }
+
+    recipe_cooking_method {
+        BIGINT recipe_id PK, FK "ON DELETE CASCADE"
+        BIGINT cooking_method_id PK, FK
     }
 
     ingredient {
@@ -155,5 +159,6 @@ erDiagram
 
     master_tier ||--o{ users : "ranks"
     master_skill_level ||--o{ recipe : "classifies"
-    master_cooking_method ||--o{ recipe : "classifies"
+    recipe ||--o{ recipe_cooking_method : "cooked by"
+    master_cooking_method ||--o{ recipe_cooking_method : "used in"
     master_category ||--o{ recipe : "classifies"

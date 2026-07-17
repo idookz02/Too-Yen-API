@@ -45,7 +45,8 @@ const tokenCondition = (token: string): SQL => {
     or exists (select 1 from recipe_ingredient ri join ingredient ing on ing.ingredient_id = ri.ingredient_id
                where ri.recipe_id = ${recipe.recipeId} and ing.name ilike ${p})
     or exists (select 1 from master_category mc where mc.category_id = ${recipe.categoryId} and mc.name ilike ${p})
-    or exists (select 1 from master_cooking_method mm where mm.cooking_method_id = ${recipe.cookingMethodId} and mm.name ilike ${p})
+    or exists (select 1 from recipe_cooking_method rcm join master_cooking_method mm on mm.cooking_method_id = rcm.cooking_method_id
+               where rcm.recipe_id = ${recipe.recipeId} and mm.name ilike ${p})
     or exists (select 1 from recipe_equipment re join master_equipment me on me.equipment_id = re.equipment_id
                where re.recipe_id = ${recipe.recipeId} and me.name ilike ${p})
     or exists (select 1 from cooking_step cs where cs.recipe_id = ${recipe.recipeId} and cs.instruction ilike ${p})
@@ -60,7 +61,7 @@ const relevanceScore = (tokens: string[]): SQL => {
     (case when (${anyToken((p) => sql`${recipe.recipeName} ilike ${p}`)}) then 100 else 0 end)
     + (case when (${anyToken((p) => sql`exists (select 1 from recipe_ingredient ri join ingredient ing on ing.ingredient_id = ri.ingredient_id where ri.recipe_id = ${recipe.recipeId} and ing.name ilike ${p})`)}) then 50 else 0 end)
     + (case when (${anyToken((p) => sql`${users.displayName} ilike ${p}`)}) then 30 else 0 end)
-    + (case when (${anyToken((p) => sql`exists (select 1 from master_category mc where mc.category_id = ${recipe.categoryId} and mc.name ilike ${p}) or exists (select 1 from master_cooking_method mm where mm.cooking_method_id = ${recipe.cookingMethodId} and mm.name ilike ${p}) or exists (select 1 from recipe_equipment re join master_equipment me on me.equipment_id = re.equipment_id where re.recipe_id = ${recipe.recipeId} and me.name ilike ${p})`)}) then 20 else 0 end)
+    + (case when (${anyToken((p) => sql`exists (select 1 from master_category mc where mc.category_id = ${recipe.categoryId} and mc.name ilike ${p}) or exists (select 1 from recipe_cooking_method rcm join master_cooking_method mm on mm.cooking_method_id = rcm.cooking_method_id where rcm.recipe_id = ${recipe.recipeId} and mm.name ilike ${p}) or exists (select 1 from recipe_equipment re join master_equipment me on me.equipment_id = re.equipment_id where re.recipe_id = ${recipe.recipeId} and me.name ilike ${p})`)}) then 20 else 0 end)
     + (case when (${anyToken((p) => sql`${recipe.description} ilike ${p}`)}) then 15 else 0 end)
     + (case when (${anyToken((p) => sql`exists (select 1 from cooking_step cs where cs.recipe_id = ${recipe.recipeId} and cs.instruction ilike ${p})`)}) then 5 else 0 end)
   )`;

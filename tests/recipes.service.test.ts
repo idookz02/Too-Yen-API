@@ -23,6 +23,7 @@ type StepRec = { step_number: number; instruction: string; imagePath: string | n
 type State = {
   recipes: Map<number, RecipeRow>;
   equipment: Map<number, number[]>;
+  cookingMethods: Map<number, number[]>;
   ingredients: Map<number, { name: string }[]>;
   steps: Map<number, StepRec[]>;
   media: Map<number, MediaRow[]>;
@@ -34,6 +35,7 @@ type State = {
 const emptyState = (): State => ({
   recipes: new Map(),
   equipment: new Map(),
+  cookingMethods: new Map(),
   ingredients: new Map(),
   steps: new Map(),
   media: new Map(),
@@ -50,7 +52,6 @@ const makeRow = (over: Partial<RecipeRow> = {}): RecipeRow => ({
   skillLevelId: 1,
   cookTimeMinutes: 30,
   servings: 4,
-  cookingMethodId: 2,
   categoryId: 3,
   status: "draft",
   publishedAt: null,
@@ -64,6 +65,7 @@ function seedComplete(state: State, over: Partial<RecipeRow> = {}) {
   const row = makeRow(over);
   state.recipes.set(row.recipeId, row);
   state.equipment.set(row.recipeId, [1]);
+  state.cookingMethods.set(row.recipeId, [2]);
   state.ingredients.set(row.recipeId, [{ name: "Shrimp" }]);
   state.steps.set(row.recipeId, [
     { step_number: 1, instruction: "Boil", imagePath: null },
@@ -116,6 +118,7 @@ function makeRepo(state: State) {
     findRow: async (id: number) => state.recipes.get(id) ?? null,
     findDetailParts: async (id: number) => ({
       masters: null,
+      cookingMethods: (state.cookingMethods.get(id) ?? []).map((c) => ({ id: c, name: `CM${c}` })),
       equipment: (state.equipment.get(id) ?? []).map((e) => ({ id: e, name: `EQ${e}` })),
       ingredients: (state.ingredients.get(id) ?? []).map((i, idx) => ({
         ingredientId: idx + 1,
@@ -145,6 +148,9 @@ function makeRepo(state: State) {
       // tests exercise the id-path; name-path resolution is a DB concern (smoke)
       state.equipment.set(id, [...new Set(items.map((e) => e.equipment_id ?? 0))]);
     },
+    replaceCookingMethods: async (id: number, ids: number[]) => {
+      state.cookingMethods.set(id, [...new Set(ids)]);
+    },
     replaceIngredients: async (id: number, items: IngredientInput[]) => {
       // id-path items carry no name — key the mock detail row off whatever's set
       state.ingredients.set(
@@ -170,6 +176,7 @@ function makeRepo(state: State) {
       return {
         row,
         equipmentCount: (state.equipment.get(id) ?? []).length,
+        cookingMethodCount: (state.cookingMethods.get(id) ?? []).length,
         ingredientCount: (state.ingredients.get(id) ?? []).length,
         stepCount: (state.steps.get(id) ?? []).length,
         hasCover: (state.media.get(id) ?? []).some((m) => m.isCover),
@@ -290,14 +297,12 @@ describe("publish", () => {
         description: null,
         skillLevelId: null,
         cookTimeMinutes: null,
-        cookingMethodId: null,
         categoryId: null,
       }),
     );
     const err = await expectAppError(() => service.publish(1, owner), 400, "INCOMPLETE_RECIPE");
     expect(err.details).toEqual([
       "recipe_name",
-      "description",
       "skill_level",
       "cooking_method",
       "cook_time_minutes",
@@ -629,7 +634,7 @@ describe("createFromMultipart", () => {
       description: "d",
       cook_time_minutes: 10,
       skill_level_id: 1,
-      cooking_method_id: 1,
+      cooking_method_ids: [1],
       category_id: 1,
       equipment: [{ equipment_id: 1 }],
       ingredients: [{ name: "Chili" }],
