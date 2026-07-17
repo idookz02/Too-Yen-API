@@ -36,6 +36,14 @@ export const UpdateMasterDTO = t.Object({
 });
 export type UpdateMasterInput = typeof UpdateMasterDTO.static;
 
+export const UpdateStatusDTO = t.Object({
+  is_active: t.Boolean({
+    description: "Toggle active (true) / inactive (false, soft delete)",
+    examples: [false],
+  }),
+});
+export type UpdateStatusInput = typeof UpdateStatusDTO.static;
+
 // ============================================================================
 // Response DTOs
 // ============================================================================

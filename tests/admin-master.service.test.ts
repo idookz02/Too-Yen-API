@@ -200,6 +200,38 @@ describe("softDelete", () => {
   });
 });
 
+describe("setStatus", () => {
+  it("reactivates inactive -> active", async () => {
+    state.rows.set("categories", [row({ id: 1, name: "Thai", isActive: false })]);
+    const res = await service.setStatus("categories", 1, true);
+    expect(res.is_active).toBe(true);
+    expect(state.rows.get("categories")![0]!.isActive).toBe(true);
+    expect(state.recalcCount).toBe(0);
+  });
+
+  it("deactivates active -> inactive", async () => {
+    state.rows.set("equipment", [row({ id: 1, name: "Pot" })]);
+    const res = await service.setStatus("equipment", 1, false);
+    expect(res.is_active).toBe(false);
+  });
+
+  it("is idempotent (same state = no update, no recalc)", async () => {
+    state.rows.set("tiers", [row({ id: 1, name: "Gold", minLikes: 500 })]);
+    await service.setStatus("tiers", 1, true); // already active
+    expect(state.recalcCount).toBe(0);
+  });
+
+  it("tier status change runs the recalc (ADR-012)", async () => {
+    state.rows.set("tiers", [row({ id: 1, name: "Gold", minLikes: 500 })]);
+    await service.setStatus("tiers", 1, false);
+    expect(state.recalcCount).toBe(1);
+  });
+
+  it("404 for a missing entry", async () => {
+    await expectAppError(() => service.setStatus("equipment", 99, false), 404, "ENTRY_NOT_FOUND");
+  });
+});
+
 describe("types", () => {
   it("returns the tab types (units is a master too)", () => {
     expect(service.types()).toEqual({

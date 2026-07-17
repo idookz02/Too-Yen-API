@@ -99,6 +99,23 @@ export class AdminMasterService {
     if (type === "tiers") await this.repo.recalcAllUserTiers(); // decision 2026-07-10
   }
 
+  // PATCH /admin/master/{type}/{id}/status — toggle is_active (reactivate / deactivate).
+  // Names stay unique by invariant (create/update block dups), so no dup check needed —
+  // this only flips the flag, like softDelete does in reverse.
+  async setStatus(type: MasterTypeParam, id: number, isActive: boolean) {
+    const current = await this.repo.findById(type, id);
+    if (!current) throw notFound("Entry not found", "ENTRY_NOT_FOUND");
+
+    if (current.isActive !== isActive) {
+      await this.repo.update(type, id, { isActive });
+      if (type === "tiers") await this.repo.recalcAllUserTiers(); // ADR-012
+    }
+
+    const row = await this.repo.findById(type, id);
+    if (!row) throw new Error(`master ${type}/${id} vanished after status change`);
+    return this.mapItem(type, row);
+  }
+
   private mapItem(type: MasterTypeParam, row: MasterRow) {
     return {
       id: row.id,

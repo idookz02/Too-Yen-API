@@ -10,6 +10,7 @@ import {
   MasterTypeParams,
   MasterTypesResponseDTO,
   UpdateMasterDTO,
+  UpdateStatusDTO,
 } from "./dto/admin-master.dto";
 
 /** Module 6 — Admin Master Data (doc/api/06-admin-master.md). Admin only (403 otherwise). */
@@ -76,6 +77,24 @@ export const adminMasterController = new Elysia({ prefix: "/admin/master" })
         summary: "Edit entry",
         description:
           "Tier changes re-run recalc_user_tier for all users (ADR-012).",
+      },
+    },
+  )
+
+  // PATCH /admin/master/{type}/{id}/status — toggle is_active
+  .patch(
+    "/:type/:id/status",
+    ({ params, body }) => adminMasterService.setStatus(params.type, params.id, body.is_active),
+    {
+      params: MasterEntryParams,
+      body: UpdateStatusDTO,
+      response: { 200: AdminMasterItemDTO },
+      detail: {
+        tags: ["Admin"],
+        summary: "Toggle entry status",
+        description:
+          "Sets is_active (true = reactivate, false = soft delete). Idempotent. " +
+          "Tier changes re-run recalc_user_tier (ADR-012).",
       },
     },
   )
